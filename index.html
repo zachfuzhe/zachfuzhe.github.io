@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Office Arcade — Kill Some Time</title>
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    font-family: 'Segoe UI', Arial, sans-serif;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 60px 20px;
+  }
+  h1 {
+    font-size: 2.5rem;
+    margin-bottom: 4px;
+    text-align: center;
+  }
+  .subtitle {
+    color: #aaa;
+    margin-bottom: 50px;
+    text-align: center;
+  }
+  .games-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 24px;
+    max-width: 700px;
+    width: 100%;
+  }
+  .game-card {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+    text-decoration: none;
+    color: white;
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .game-card:hover {
+    transform: translateY(-4px);
+    background: rgba(255,255,255,0.1);
+  }
+  .game-icon {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+  }
+  .game-title {
+    font-size: 1.2rem;
+    font-weight: bold;
+    margin-bottom: 6px;
+  }
+  .game-desc {
+    font-size: 0.9rem;
+    color: #bbb;
+  }
+  footer {
+    margin-top: 60px;
+    color: #666;
+    font-size: 0.85rem;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+  <h1>🕹️ Office Arcade</h1>
+  <p class="subtitle">Quick games to kill some time. No installs, just play.</p>
+
+  <div class="games-grid">
+    <a class="game-card" href="fighting-game.html">
+      <div class="game-icon">🥊</div>
+      <div class="game-title">Fighting Game</div>
+      <div class="game-desc">Two-player brawler. First to zero health loses.</div>
+    </a>
+    <a class="game-card" href="platformer-game.html">
+      <div class="game-icon">🏃</div>
+      <div class="game-title">Platformer</div>
+      <div class="game-desc">3 levels, coins, enemies, and a lives system.</div>
+    </a>
+  </div>
+
+  <footer>More games coming soon.</footer>
+</body>
+</html>
