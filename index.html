@@ -1,89 +1,572 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Office Arcade — Kill Some Time</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mofish Arcade — Built for Your Next Break</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
+  :root {
+    --navy: #0e2534;
+    --navy-deep: #081a25;
+    --teal: #3f9c96;
+    --teal-bright: #4ecdc4;
+    --teal-pale: #a8ebe5;
+    --orange: #ff9146;
+    --orange-dark: #e8722f;
+    --cream: #fff3d6;
+    --cream-soft: #fff9ec;
+    --ink: #1e1410;
+  }
+  * { box-sizing: border-box; }
   body {
     margin: 0;
-    min-height: 100vh;
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-    font-family: 'Segoe UI', Arial, sans-serif;
-    color: white;
+    background: var(--navy);
+    color: var(--cream);
+    font-family: 'Nunito', sans-serif;
+    overflow-x: hidden;
+  }
+  .pixel { font-family: 'Press Start 2P', monospace; }
+
+  a { color: inherit; }
+
+  /* ---------- NAV ---------- */
+  nav {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    padding: 60px 20px;
+    justify-content: space-between;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px 24px;
   }
-  h1 {
-    font-size: 2.5rem;
-    margin-bottom: 4px;
-    text-align: center;
+  .logo-group { display: flex; align-items: center; gap: 12px; }
+  .logo-group svg { width: 40px; height: auto; }
+  .wordmark { font-size: 0.85rem; letter-spacing: 1px; color: var(--cream); }
+  .wordmark span { color: var(--teal-bright); }
+  .nav-note {
+    font-size: 0.8rem;
+    color: var(--teal-pale);
   }
-  .subtitle {
-    color: #aaa;
-    margin-bottom: 50px;
+
+  /* ---------- HERO ---------- */
+  .hero {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px 24px 60px;
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: 20px;
+  }
+  .hero-illustration {
+    width: 100%;
+    max-width: 380px;
+    animation: bob 3.2s ease-in-out infinite;
+  }
+  .hero-illustration svg { width: 100%; height: auto; display: block; }
+  @keyframes bob {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-illustration { animation: none; }
+  }
+  .hero-text { text-align: center; max-width: 560px; }
+  .hero-tagline {
+    font-size: 0.8rem;
+    color: var(--teal-bright);
+    letter-spacing: 0.5px;
+    margin-bottom: 14px;
+  }
+  .hero-tagline .cn { color: var(--orange); font-weight: 800; font-size: 1rem; }
+  h1.hero-title {
+    font-size: 1.6rem;
+    line-height: 1.7;
+    margin: 0 0 18px;
+    color: var(--cream);
+  }
+  h1.hero-title em {
+    font-style: normal;
+    color: var(--orange);
+  }
+  .hero-sub {
+    font-size: 1.05rem;
+    line-height: 1.6;
+    color: var(--teal-pale);
+    margin: 0 0 28px;
+  }
+  .cta-button {
+    display: inline-block;
+    background: var(--orange);
+    color: var(--ink);
+    font-weight: 800;
+    font-size: 1rem;
+    padding: 14px 30px;
+    border: 4px solid var(--ink);
+    box-shadow: 5px 5px 0 var(--ink);
+    text-decoration: none;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+    cursor: pointer;
+  }
+  .cta-button:hover {
+    transform: translate(2px, 2px);
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+
+  /* ---------- WAVE DIVIDER ---------- */
+  .wave-divider { display: block; width: 100%; height: 40px; }
+  .wave-divider path { fill: var(--navy-deep); }
+
+  /* ---------- GAMES SECTION ---------- */
+  .games-section {
+    background: var(--navy-deep);
+    padding: 10px 24px 70px;
+  }
+  .games-inner { max-width: 1100px; margin: 0 auto; }
+  .games-heading {
     text-align: center;
+    font-size: 1.1rem;
+    color: var(--cream);
+    margin: 10px 0 36px;
   }
   .games-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: 1fr;
     gap: 24px;
-    max-width: 700px;
-    width: 100%;
   }
+  @media (min-width: 640px) {
+    .games-grid { grid-template-columns: repeat(2, 1fr); }
+    .hero { flex-direction: row; text-align: left; padding-top: 40px; }
+    .hero-text { text-align: left; }
+    .hero-illustration { max-width: 320px; }
+    h1.hero-title { font-size: 2rem; }
+  }
+
   .game-card {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 12px;
-    padding: 24px;
+    background: var(--cream-soft);
+    color: var(--ink);
+    border: 4px solid var(--ink);
+    box-shadow: 6px 6px 0 rgba(0,0,0,0.35);
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     text-align: center;
+    transition: transform 0.12s ease;
+  }
+  .game-card:hover { transform: translateY(-4px); }
+  .game-card svg { width: 64px; height: auto; margin-bottom: 14px; }
+  .game-card h3 { margin: 0 0 8px; font-size: 1.15rem; }
+  .game-card p { margin: 0 0 18px; font-size: 0.95rem; color: #4a4038; line-height: 1.5; }
+  .play-link {
+    display: inline-block;
+    background: var(--teal);
+    color: var(--cream-soft);
+    font-weight: 800;
+    padding: 10px 22px;
+    border: 3px solid var(--ink);
     text-decoration: none;
-    color: white;
-    transition: transform 0.15s ease, background 0.15s ease;
+    box-shadow: 3px 3px 0 var(--ink);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
   }
-  .game-card:hover {
-    transform: translateY(-4px);
-    background: rgba(255,255,255,0.1);
-  }
-  .game-icon {
-    font-size: 2.5rem;
-    margin-bottom: 12px;
-  }
-  .game-title {
-    font-size: 1.2rem;
-    font-weight: bold;
-    margin-bottom: 6px;
-  }
-  .game-desc {
-    font-size: 0.9rem;
-    color: #bbb;
-  }
-  footer {
-    margin-top: 60px;
-    color: #666;
-    font-size: 0.85rem;
+  .play-link:hover { transform: translate(2px,2px); box-shadow: 1px 1px 0 var(--ink); }
+
+  .coming-soon-card {
+    border: 4px dashed var(--teal);
+    background: transparent;
+    color: var(--teal-pale);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
     text-align: center;
+    font-size: 0.95rem;
   }
+
+  footer {
+    text-align: center;
+    padding: 34px 20px 46px;
+    color: var(--teal-pale);
+    font-size: 0.85rem;
+  }
+  footer .logo-group { justify-content: center; margin-bottom: 12px; }
+  footer .logo-group svg { width: 28px; }
 </style>
 </head>
 <body>
-  <h1>🕹️ Office Arcade</h1>
-  <p class="subtitle">Quick games to kill some time. No installs, just play.</p>
 
-  <div class="games-grid">
-    <a class="game-card" href="fighting-game.html">
-      <div class="game-icon">🥊</div>
-      <div class="game-title">Fighting Game</div>
-      <div class="game-desc">Two-player brawler. First to zero health loses.</div>
-    </a>
-    <a class="game-card" href="platformer-game.html">
-      <div class="game-icon">🏃</div>
-      <div class="game-title">Platformer</div>
-      <div class="game-desc">3 levels, coins, enemies, and a lives system.</div>
-    </a>
+<nav>
+  <div class="logo-group">
+    <svg viewBox="0 0 220 130" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+<rect x="80" y="0" width="10" height="10" fill="#1e140f"/>
+<rect x="70" y="10" width="10" height="10" fill="#1e140f"/>
+<rect x="80" y="10" width="10" height="10" fill="#ffb266"/>
+<rect x="90" y="10" width="10" height="10" fill="#1e140f"/>
+<rect x="60" y="20" width="10" height="10" fill="#1e140f"/>
+<rect x="70" y="20" width="30" height="10" fill="#ffb266"/>
+<rect x="100" y="20" width="10" height="10" fill="#1e140f"/>
+<rect x="60" y="30" width="10" height="10" fill="#1e140f"/>
+<rect x="70" y="30" width="40" height="10" fill="#ff9146"/>
+<rect x="110" y="30" width="30" height="10" fill="#1e140f"/>
+<rect x="50" y="40" width="10" height="10" fill="#1e140f"/>
+<rect x="60" y="40" width="80" height="10" fill="#ff9146"/>
+<rect x="140" y="40" width="10" height="10" fill="#1e140f"/>
+<rect x="20" y="50" width="30" height="10" fill="#1e140f"/>
+<rect x="50" y="50" width="60" height="10" fill="#ff9146"/>
+<rect x="110" y="50" width="20" height="10" fill="#ffffff"/>
+<rect x="130" y="50" width="20" height="10" fill="#ff9146"/>
+<rect x="150" y="50" width="10" height="10" fill="#1e140f"/>
+<rect x="0" y="60" width="20" height="10" fill="#1e140f"/>
+<rect x="20" y="60" width="20" height="10" fill="#ffb266"/>
+<rect x="40" y="60" width="70" height="10" fill="#ff9146"/>
+<rect x="110" y="60" width="10" height="10" fill="#ffffff"/>
+<rect x="120" y="60" width="10" height="10" fill="#141419"/>
+<rect x="130" y="60" width="20" height="10" fill="#ff9146"/>
+<rect x="150" y="60" width="10" height="10" fill="#1e140f"/>
+<rect x="0" y="70" width="20" height="10" fill="#1e140f"/>
+<rect x="20" y="70" width="20" height="10" fill="#ffb266"/>
+<rect x="40" y="70" width="50" height="10" fill="#ff9146"/>
+<rect x="90" y="70" width="60" height="10" fill="#ffe9c6"/>
+<rect x="150" y="70" width="10" height="10" fill="#1e140f"/>
+<rect x="20" y="80" width="30" height="10" fill="#1e140f"/>
+<rect x="50" y="80" width="30" height="10" fill="#e67030"/>
+<rect x="80" y="80" width="20" height="10" fill="#ffe9c6"/>
+<rect x="100" y="80" width="10" height="10" fill="#ffb496"/>
+<rect x="110" y="80" width="40" height="10" fill="#ffe9c6"/>
+<rect x="150" y="80" width="10" height="10" fill="#1e140f"/>
+<rect x="50" y="90" width="10" height="10" fill="#1e140f"/>
+<rect x="60" y="90" width="20" height="10" fill="#e67030"/>
+<rect x="80" y="90" width="60" height="10" fill="#ffe9c6"/>
+<rect x="140" y="90" width="10" height="10" fill="#1e140f"/>
+<rect x="60" y="100" width="10" height="10" fill="#1e140f"/>
+<rect x="70" y="100" width="10" height="10" fill="#e67030"/>
+<rect x="80" y="100" width="20" height="10" fill="#ff9146"/>
+<rect x="100" y="100" width="40" height="10" fill="#1e140f"/>
+<rect x="70" y="110" width="10" height="10" fill="#1e140f"/>
+<rect x="80" y="110" width="10" height="10" fill="#ffb266"/>
+<rect x="90" y="110" width="10" height="10" fill="#1e140f"/>
+<rect x="80" y="120" width="10" height="10" fill="#1e140f"/>
+</svg>
+    <span class="wordmark pixel">MO<span>FISH</span></span>
   </div>
+  <div class="nav-note pixel" style="font-size:0.7rem;">built for your next break</div>
+</nav>
 
-  <footer>More games coming soon.</footer>
+<div class="hero">
+  <div class="hero-illustration">
+    <svg viewBox="0 0 440 300" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+<rect x="190" y="60" width="50" height="10" fill="#1e140f"/>
+<rect x="150" y="70" width="40" height="10" fill="#1e140f"/>
+<rect x="190" y="70" width="50" height="10" fill="#a8ebe5"/>
+<rect x="240" y="70" width="40" height="10" fill="#1e140f"/>
+<rect x="130" y="80" width="20" height="10" fill="#1e140f"/>
+<rect x="150" y="80" width="20" height="10" fill="#a8ebe5"/>
+<rect x="170" y="80" width="10" height="10" fill="#4ecdc4"/>
+<rect x="180" y="80" width="70" height="10" fill="#1e140f"/>
+<rect x="250" y="80" width="10" height="10" fill="#4ecdc4"/>
+<rect x="260" y="80" width="20" height="10" fill="#a8ebe5"/>
+<rect x="280" y="80" width="20" height="10" fill="#1e140f"/>
+<rect x="110" y="90" width="20" height="10" fill="#1e140f"/>
+<rect x="130" y="90" width="10" height="10" fill="#a8ebe5"/>
+<rect x="140" y="90" width="10" height="10" fill="#4ecdc4"/>
+<rect x="150" y="90" width="30" height="10" fill="#1e140f"/>
+<rect x="250" y="90" width="30" height="10" fill="#1e140f"/>
+<rect x="280" y="90" width="10" height="10" fill="#4ecdc4"/>
+<rect x="290" y="90" width="10" height="10" fill="#a8ebe5"/>
+<rect x="300" y="90" width="20" height="10" fill="#1e140f"/>
+<rect x="100" y="100" width="10" height="10" fill="#1e140f"/>
+<rect x="110" y="100" width="20" height="10" fill="#a8ebe5"/>
+<rect x="130" y="100" width="10" height="10" fill="#4ecdc4"/>
+<rect x="140" y="100" width="10" height="10" fill="#1e140f"/>
+<rect x="280" y="100" width="10" height="10" fill="#1e140f"/>
+<rect x="290" y="100" width="10" height="10" fill="#4ecdc4"/>
+<rect x="300" y="100" width="20" height="10" fill="#a8ebe5"/>
+<rect x="320" y="100" width="10" height="10" fill="#1e140f"/>
+<rect x="90" y="110" width="10" height="10" fill="#1e140f"/>
+<rect x="100" y="110" width="10" height="10" fill="#a8ebe5"/>
+<rect x="110" y="110" width="20" height="10" fill="#4ecdc4"/>
+<rect x="130" y="110" width="10" height="10" fill="#1e140f"/>
+<rect x="180" y="110" width="10" height="10" fill="#1e140f"/>
+<rect x="290" y="110" width="10" height="10" fill="#1e140f"/>
+<rect x="300" y="110" width="20" height="10" fill="#4ecdc4"/>
+<rect x="320" y="110" width="10" height="10" fill="#a8ebe5"/>
+<rect x="330" y="110" width="10" height="10" fill="#1e140f"/>
+<rect x="90" y="120" width="10" height="10" fill="#1e140f"/>
+<rect x="100" y="120" width="10" height="10" fill="#a8ebe5"/>
+<rect x="110" y="120" width="10" height="10" fill="#4ecdc4"/>
+<rect x="120" y="120" width="10" height="10" fill="#1e140f"/>
+<rect x="170" y="120" width="10" height="10" fill="#1e140f"/>
+<rect x="180" y="120" width="10" height="10" fill="#ffb266"/>
+<rect x="190" y="120" width="10" height="10" fill="#1e140f"/>
+<rect x="300" y="120" width="10" height="10" fill="#1e140f"/>
+<rect x="310" y="120" width="10" height="10" fill="#4ecdc4"/>
+<rect x="320" y="120" width="10" height="10" fill="#a8ebe5"/>
+<rect x="330" y="120" width="10" height="10" fill="#1e140f"/>
+<rect x="80" y="130" width="10" height="10" fill="#1e140f"/>
+<rect x="90" y="130" width="10" height="10" fill="#a8ebe5"/>
+<rect x="100" y="130" width="10" height="10" fill="#4ecdc4"/>
+<rect x="110" y="130" width="10" height="10" fill="#1e140f"/>
+<rect x="160" y="130" width="10" height="10" fill="#1e140f"/>
+<rect x="170" y="130" width="30" height="10" fill="#ffb266"/>
+<rect x="200" y="130" width="10" height="10" fill="#1e140f"/>
+<rect x="310" y="130" width="10" height="10" fill="#1e140f"/>
+<rect x="320" y="130" width="10" height="10" fill="#4ecdc4"/>
+<rect x="330" y="130" width="10" height="10" fill="#a8ebe5"/>
+<rect x="340" y="130" width="10" height="10" fill="#1e140f"/>
+<rect x="80" y="140" width="10" height="10" fill="#1e140f"/>
+<rect x="90" y="140" width="10" height="10" fill="#4ecdc4"/>
+<rect x="100" y="140" width="10" height="10" fill="#1e140f"/>
+<rect x="160" y="140" width="10" height="10" fill="#1e140f"/>
+<rect x="170" y="140" width="40" height="10" fill="#ff9146"/>
+<rect x="210" y="140" width="30" height="10" fill="#1e140f"/>
+<rect x="320" y="140" width="10" height="10" fill="#1e140f"/>
+<rect x="330" y="140" width="10" height="10" fill="#4ecdc4"/>
+<rect x="340" y="140" width="10" height="10" fill="#1e140f"/>
+<rect x="70" y="150" width="10" height="10" fill="#1e140f"/>
+<rect x="80" y="150" width="10" height="10" fill="#a8ebe5"/>
+<rect x="90" y="150" width="10" height="10" fill="#4ecdc4"/>
+<rect x="100" y="150" width="10" height="10" fill="#1e140f"/>
+<rect x="150" y="150" width="10" height="10" fill="#1e140f"/>
+<rect x="160" y="150" width="40" height="10" fill="#ff9146"/>
+<rect x="200" y="150" width="30" height="10" fill="#191414"/>
+<rect x="230" y="150" width="10" height="10" fill="#ff9146"/>
+<rect x="240" y="150" width="10" height="10" fill="#1e140f"/>
+<rect x="320" y="150" width="10" height="10" fill="#1e140f"/>
+<rect x="330" y="150" width="10" height="10" fill="#4ecdc4"/>
+<rect x="340" y="150" width="10" height="10" fill="#a8ebe5"/>
+<rect x="350" y="150" width="10" height="10" fill="#1e140f"/>
+<rect x="70" y="160" width="10" height="10" fill="#1e140f"/>
+<rect x="80" y="160" width="10" height="10" fill="#a8ebe5"/>
+<rect x="90" y="160" width="10" height="10" fill="#4ecdc4"/>
+<rect x="100" y="160" width="10" height="10" fill="#1e140f"/>
+<rect x="120" y="160" width="30" height="10" fill="#1e140f"/>
+<rect x="150" y="160" width="50" height="10" fill="#ff9146"/>
+<rect x="200" y="160" width="30" height="10" fill="#2d8296"/>
+<rect x="230" y="160" width="20" height="10" fill="#ff9146"/>
+<rect x="250" y="160" width="10" height="10" fill="#1e140f"/>
+<rect x="320" y="160" width="10" height="10" fill="#1e140f"/>
+<rect x="330" y="160" width="10" height="10" fill="#4ecdc4"/>
+<rect x="340" y="160" width="10" height="10" fill="#a8ebe5"/>
+<rect x="350" y="160" width="10" height="10" fill="#1e140f"/>
+<rect x="70" y="170" width="10" height="10" fill="#1e140f"/>
+<rect x="80" y="170" width="10" height="10" fill="#a8ebe5"/>
+<rect x="90" y="170" width="10" height="10" fill="#4ecdc4"/>
+<rect x="100" y="170" width="20" height="10" fill="#1e140f"/>
+<rect x="120" y="170" width="20" height="10" fill="#ffb266"/>
+<rect x="140" y="170" width="60" height="10" fill="#ff9146"/>
+<rect x="200" y="170" width="30" height="10" fill="#2d8296"/>
+<rect x="230" y="170" width="20" height="10" fill="#ff9146"/>
+<rect x="250" y="170" width="10" height="10" fill="#1e140f"/>
+<rect x="320" y="170" width="10" height="10" fill="#1e140f"/>
+<rect x="330" y="170" width="10" height="10" fill="#4ecdc4"/>
+<rect x="340" y="170" width="10" height="10" fill="#a8ebe5"/>
+<rect x="350" y="170" width="10" height="10" fill="#1e140f"/>
+<rect x="70" y="180" width="10" height="10" fill="#1e140f"/>
+<rect x="80" y="180" width="10" height="10" fill="#a8ebe5"/>
+<rect x="90" y="180" width="10" height="10" fill="#4ecdc4"/>
+<rect x="100" y="180" width="20" height="10" fill="#1e140f"/>
+<rect x="120" y="180" width="20" height="10" fill="#ffb266"/>
+<rect x="140" y="180" width="50" height="10" fill="#ff9146"/>
+<rect x="190" y="180" width="10" height="10" fill="#ffe9c6"/>
+<rect x="200" y="180" width="30" height="10" fill="#191414"/>
+<rect x="230" y="180" width="20" height="10" fill="#ffe9c6"/>
+<rect x="250" y="180" width="10" height="10" fill="#1e140f"/>
+<rect x="320" y="180" width="10" height="10" fill="#1e140f"/>
+<rect x="330" y="180" width="10" height="10" fill="#4ecdc4"/>
+<rect x="340" y="180" width="10" height="10" fill="#a8ebe5"/>
+<rect x="350" y="180" width="10" height="10" fill="#1e140f"/>
+<rect x="370" y="180" width="20" height="10" fill="#1e140f"/>
+<rect x="70" y="190" width="10" height="10" fill="#1e140f"/>
+<rect x="80" y="190" width="10" height="10" fill="#a8ebe5"/>
+<rect x="90" y="190" width="10" height="10" fill="#4ecdc4"/>
+<rect x="100" y="190" width="10" height="10" fill="#1e140f"/>
+<rect x="120" y="190" width="30" height="10" fill="#1e140f"/>
+<rect x="150" y="190" width="30" height="10" fill="#e67030"/>
+<rect x="180" y="190" width="20" height="10" fill="#ffe9c6"/>
+<rect x="200" y="190" width="10" height="10" fill="#ffb496"/>
+<rect x="210" y="190" width="40" height="10" fill="#ffe9c6"/>
+<rect x="250" y="190" width="10" height="10" fill="#1e140f"/>
+<rect x="320" y="190" width="10" height="10" fill="#1e140f"/>
+<rect x="330" y="190" width="10" height="10" fill="#4ecdc4"/>
+<rect x="340" y="190" width="10" height="10" fill="#a8ebe5"/>
+<rect x="350" y="190" width="20" height="10" fill="#1e140f"/>
+<rect x="370" y="190" width="20" height="10" fill="#ffe9c6"/>
+<rect x="390" y="190" width="10" height="10" fill="#1e140f"/>
+<rect x="80" y="200" width="10" height="10" fill="#1e140f"/>
+<rect x="90" y="200" width="10" height="10" fill="#4ecdc4"/>
+<rect x="100" y="200" width="10" height="10" fill="#1e140f"/>
+<rect x="150" y="200" width="10" height="10" fill="#1e140f"/>
+<rect x="160" y="200" width="20" height="10" fill="#e67030"/>
+<rect x="180" y="200" width="60" height="10" fill="#ffe9c6"/>
+<rect x="240" y="200" width="10" height="10" fill="#1e140f"/>
+<rect x="320" y="200" width="10" height="10" fill="#1e140f"/>
+<rect x="330" y="200" width="10" height="10" fill="#4ecdc4"/>
+<rect x="340" y="200" width="10" height="10" fill="#1e140f"/>
+<rect x="360" y="200" width="10" height="10" fill="#1e140f"/>
+<rect x="370" y="200" width="20" height="10" fill="#ff6e82"/>
+<rect x="390" y="200" width="10" height="10" fill="#1e140f"/>
+<rect x="80" y="210" width="10" height="10" fill="#1e140f"/>
+<rect x="90" y="210" width="10" height="10" fill="#a8ebe5"/>
+<rect x="100" y="210" width="10" height="10" fill="#4ecdc4"/>
+<rect x="110" y="210" width="10" height="10" fill="#1e140f"/>
+<rect x="160" y="210" width="10" height="10" fill="#1e140f"/>
+<rect x="170" y="210" width="10" height="10" fill="#e67030"/>
+<rect x="180" y="210" width="20" height="10" fill="#ff9146"/>
+<rect x="200" y="210" width="40" height="10" fill="#1e140f"/>
+<rect x="310" y="210" width="10" height="10" fill="#1e140f"/>
+<rect x="320" y="210" width="10" height="10" fill="#4ecdc4"/>
+<rect x="330" y="210" width="10" height="10" fill="#a8ebe5"/>
+<rect x="340" y="210" width="10" height="10" fill="#1e140f"/>
+<rect x="360" y="210" width="10" height="10" fill="#1e140f"/>
+<rect x="370" y="210" width="20" height="10" fill="#ff6e82"/>
+<rect x="390" y="210" width="10" height="10" fill="#1e140f"/>
+<rect x="90" y="220" width="10" height="10" fill="#1e140f"/>
+<rect x="100" y="220" width="10" height="10" fill="#a8ebe5"/>
+<rect x="110" y="220" width="10" height="10" fill="#4ecdc4"/>
+<rect x="120" y="220" width="10" height="10" fill="#1e140f"/>
+<rect x="170" y="220" width="10" height="10" fill="#1e140f"/>
+<rect x="180" y="220" width="10" height="10" fill="#ffb266"/>
+<rect x="190" y="220" width="10" height="10" fill="#1e140f"/>
+<rect x="300" y="220" width="10" height="10" fill="#1e140f"/>
+<rect x="310" y="220" width="10" height="10" fill="#4ecdc4"/>
+<rect x="320" y="220" width="10" height="10" fill="#a8ebe5"/>
+<rect x="330" y="220" width="10" height="10" fill="#1e140f"/>
+<rect x="370" y="220" width="20" height="10" fill="#1e140f"/>
+<rect x="90" y="230" width="10" height="10" fill="#1e140f"/>
+<rect x="100" y="230" width="10" height="10" fill="#a8ebe5"/>
+<rect x="110" y="230" width="20" height="10" fill="#4ecdc4"/>
+<rect x="130" y="230" width="10" height="10" fill="#1e140f"/>
+<rect x="180" y="230" width="10" height="10" fill="#1e140f"/>
+<rect x="290" y="230" width="10" height="10" fill="#1e140f"/>
+<rect x="300" y="230" width="20" height="10" fill="#4ecdc4"/>
+<rect x="320" y="230" width="10" height="10" fill="#a8ebe5"/>
+<rect x="330" y="230" width="10" height="10" fill="#1e140f"/>
+<rect x="100" y="240" width="10" height="10" fill="#1e140f"/>
+<rect x="110" y="240" width="20" height="10" fill="#a8ebe5"/>
+<rect x="130" y="240" width="10" height="10" fill="#4ecdc4"/>
+<rect x="140" y="240" width="10" height="10" fill="#1e140f"/>
+<rect x="280" y="240" width="10" height="10" fill="#1e140f"/>
+<rect x="290" y="240" width="10" height="10" fill="#4ecdc4"/>
+<rect x="300" y="240" width="20" height="10" fill="#a8ebe5"/>
+<rect x="320" y="240" width="10" height="10" fill="#1e140f"/>
+<rect x="110" y="250" width="20" height="10" fill="#1e140f"/>
+<rect x="130" y="250" width="10" height="10" fill="#a8ebe5"/>
+<rect x="140" y="250" width="10" height="10" fill="#4ecdc4"/>
+<rect x="150" y="250" width="30" height="10" fill="#1e140f"/>
+<rect x="250" y="250" width="30" height="10" fill="#1e140f"/>
+<rect x="280" y="250" width="10" height="10" fill="#4ecdc4"/>
+<rect x="290" y="250" width="10" height="10" fill="#a8ebe5"/>
+<rect x="300" y="250" width="20" height="10" fill="#1e140f"/>
+<rect x="130" y="260" width="20" height="10" fill="#1e140f"/>
+<rect x="150" y="260" width="20" height="10" fill="#a8ebe5"/>
+<rect x="170" y="260" width="10" height="10" fill="#4ecdc4"/>
+<rect x="180" y="260" width="70" height="10" fill="#1e140f"/>
+<rect x="250" y="260" width="10" height="10" fill="#4ecdc4"/>
+<rect x="260" y="260" width="20" height="10" fill="#a8ebe5"/>
+<rect x="280" y="260" width="20" height="10" fill="#1e140f"/>
+<rect x="150" y="270" width="40" height="10" fill="#1e140f"/>
+<rect x="190" y="270" width="50" height="10" fill="#a8ebe5"/>
+<rect x="240" y="270" width="40" height="10" fill="#1e140f"/>
+<rect x="190" y="280" width="50" height="10" fill="#1e140f"/>
+</svg>
+  </div>
+  <div class="hero-text">
+    <div class="hero-tagline"><span class="cn">摸鱼</span> · mō yú · "quietly doing anything but work"</div>
+    <h1 class="hero-title pixel">Mo the fish never<br>worked a <em>day</em> in his life.</h1>
+    <p class="hero-sub">Neither should you, for the next five minutes. Pick a game.</p>
+    <a href="#games" class="cta-button pixel">PICK A GAME</a>
+  </div>
+</div>
+
+<svg class="wave-divider" viewBox="0 0 1200 40" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0,20 Q50,0 100,20 T200,20 T300,20 T400,20 T500,20 T600,20 T700,20 T800,20 T900,20 T1000,20 T1100,20 T1200,20 L1200,40 L0,40 Z"/>
+</svg>
+
+<div class="games-section" id="games">
+  <div class="games-inner">
+    <h2 class="games-heading pixel">Pick your game</h2>
+    <div class="games-grid">
+
+      <div class="game-card">
+        <svg viewBox="0 0 140 120" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges"><rect x="50" y="10" width="40" height="10" fill="#1e1410"/><rect x="40" y="20" width="10" height="10" fill="#1e1410"/><rect x="50" y="20" width="40" height="10" fill="#e13c3c"/><rect x="90" y="20" width="10" height="10" fill="#1e1410"/><rect x="30" y="30" width="20" height="10" fill="#1e1410"/><rect x="50" y="30" width="50" height="10" fill="#e13c3c"/><rect x="100" y="30" width="10" height="10" fill="#1e1410"/><rect x="20" y="40" width="20" height="10" fill="#1e1410"/><rect x="50" y="40" width="10" height="10" fill="#1e1410"/><rect x="60" y="40" width="40" height="10" fill="#e13c3c"/><rect x="100" y="40" width="10" height="10" fill="#1e1410"/><rect x="20" y="50" width="10" height="10" fill="#1e1410"/><rect x="30" y="50" width="10" height="10" fill="#e13c3c"/><rect x="40" y="50" width="10" height="10" fill="#1e1410"/><rect x="50" y="50" width="50" height="10" fill="#e13c3c"/><rect x="100" y="50" width="10" height="10" fill="#1e1410"/><rect x="20" y="60" width="10" height="10" fill="#1e1410"/><rect x="30" y="60" width="70" height="10" fill="#e13c3c"/><rect x="100" y="60" width="10" height="10" fill="#1e1410"/><rect x="30" y="70" width="10" height="10" fill="#1e1410"/><rect x="40" y="70" width="60" height="10" fill="#e13c3c"/><rect x="100" y="70" width="10" height="10" fill="#1e1410"/><rect x="40" y="80" width="10" height="10" fill="#1e1410"/><rect x="50" y="80" width="40" height="10" fill="#f0ebe1"/><rect x="90" y="80" width="10" height="10" fill="#1e1410"/><rect x="40" y="90" width="10" height="10" fill="#1e1410"/><rect x="50" y="90" width="40" height="10" fill="#f0ebe1"/><rect x="90" y="90" width="10" height="10" fill="#1e1410"/><rect x="50" y="100" width="40" height="10" fill="#1e1410"/></svg>
+        <h3>Fighting Game</h3>
+        <p>Two-player brawler. Best reflexes (and best trash talk) wins.</p>
+        <a class="play-link pixel" href="fighting-game.html">PLAY</a>
+      </div>
+
+      <div class="game-card">
+        <svg viewBox="0 0 140 90" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges"><rect x="20" y="10" width="10" height="10" fill="#1e1410"/><rect x="70" y="10" width="10" height="10" fill="#1e1410"/><rect x="120" y="10" width="10" height="10" fill="#1e1410"/><rect x="10" y="20" width="10" height="10" fill="#1e1410"/><rect x="20" y="20" width="10" height="10" fill="#ffd166"/><rect x="30" y="20" width="10" height="10" fill="#1e1410"/><rect x="60" y="20" width="10" height="10" fill="#1e1410"/><rect x="70" y="20" width="10" height="10" fill="#ffd166"/><rect x="80" y="20" width="10" height="10" fill="#1e1410"/><rect x="110" y="20" width="10" height="10" fill="#1e1410"/><rect x="120" y="20" width="10" height="10" fill="#ffd166"/><rect x="130" y="20" width="10" height="10" fill="#1e1410"/><rect x="10" y="30" width="10" height="10" fill="#1e1410"/><rect x="20" y="30" width="20" height="10" fill="#ffd166"/><rect x="40" y="30" width="20" height="10" fill="#1e1410"/><rect x="60" y="30" width="30" height="10" fill="#ffd166"/><rect x="90" y="30" width="20" height="10" fill="#1e1410"/><rect x="110" y="30" width="20" height="10" fill="#ffd166"/><rect x="130" y="30" width="10" height="10" fill="#1e1410"/><rect x="10" y="40" width="10" height="10" fill="#1e1410"/><rect x="20" y="40" width="110" height="10" fill="#ffd166"/><rect x="130" y="40" width="10" height="10" fill="#1e1410"/><rect x="10" y="50" width="10" height="10" fill="#1e1410"/><rect x="20" y="50" width="100" height="10" fill="#ffebb4"/><rect x="120" y="50" width="10" height="10" fill="#ffd166"/><rect x="130" y="50" width="10" height="10" fill="#1e1410"/><rect x="10" y="60" width="10" height="10" fill="#1e1410"/><rect x="20" y="60" width="110" height="10" fill="#ffd166"/><rect x="130" y="60" width="10" height="10" fill="#1e1410"/><rect x="20" y="70" width="110" height="10" fill="#1e1410"/></svg>
+        <h3>Platformer</h3>
+        <p>3 levels, patrolling enemies, and just enough coins to feel productive.</p>
+        <a class="play-link pixel" href="platformer-game.html">PLAY</a>
+      </div>
+
+      <div class="coming-soon-card">
+        More silly games are being built.<br>Check back soon.
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="logo-group">
+    <svg viewBox="0 0 220 130" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+<rect x="80" y="0" width="10" height="10" fill="#1e140f"/>
+<rect x="70" y="10" width="10" height="10" fill="#1e140f"/>
+<rect x="80" y="10" width="10" height="10" fill="#ffb266"/>
+<rect x="90" y="10" width="10" height="10" fill="#1e140f"/>
+<rect x="60" y="20" width="10" height="10" fill="#1e140f"/>
+<rect x="70" y="20" width="30" height="10" fill="#ffb266"/>
+<rect x="100" y="20" width="10" height="10" fill="#1e140f"/>
+<rect x="60" y="30" width="10" height="10" fill="#1e140f"/>
+<rect x="70" y="30" width="40" height="10" fill="#ff9146"/>
+<rect x="110" y="30" width="30" height="10" fill="#1e140f"/>
+<rect x="50" y="40" width="10" height="10" fill="#1e140f"/>
+<rect x="60" y="40" width="80" height="10" fill="#ff9146"/>
+<rect x="140" y="40" width="10" height="10" fill="#1e140f"/>
+<rect x="20" y="50" width="30" height="10" fill="#1e140f"/>
+<rect x="50" y="50" width="60" height="10" fill="#ff9146"/>
+<rect x="110" y="50" width="20" height="10" fill="#ffffff"/>
+<rect x="130" y="50" width="20" height="10" fill="#ff9146"/>
+<rect x="150" y="50" width="10" height="10" fill="#1e140f"/>
+<rect x="0" y="60" width="20" height="10" fill="#1e140f"/>
+<rect x="20" y="60" width="20" height="10" fill="#ffb266"/>
+<rect x="40" y="60" width="70" height="10" fill="#ff9146"/>
+<rect x="110" y="60" width="10" height="10" fill="#ffffff"/>
+<rect x="120" y="60" width="10" height="10" fill="#141419"/>
+<rect x="130" y="60" width="20" height="10" fill="#ff9146"/>
+<rect x="150" y="60" width="10" height="10" fill="#1e140f"/>
+<rect x="0" y="70" width="20" height="10" fill="#1e140f"/>
+<rect x="20" y="70" width="20" height="10" fill="#ffb266"/>
+<rect x="40" y="70" width="50" height="10" fill="#ff9146"/>
+<rect x="90" y="70" width="60" height="10" fill="#ffe9c6"/>
+<rect x="150" y="70" width="10" height="10" fill="#1e140f"/>
+<rect x="20" y="80" width="30" height="10" fill="#1e140f"/>
+<rect x="50" y="80" width="30" height="10" fill="#e67030"/>
+<rect x="80" y="80" width="20" height="10" fill="#ffe9c6"/>
+<rect x="100" y="80" width="10" height="10" fill="#ffb496"/>
+<rect x="110" y="80" width="40" height="10" fill="#ffe9c6"/>
+<rect x="150" y="80" width="10" height="10" fill="#1e140f"/>
+<rect x="50" y="90" width="10" height="10" fill="#1e140f"/>
+<rect x="60" y="90" width="20" height="10" fill="#e67030"/>
+<rect x="80" y="90" width="60" height="10" fill="#ffe9c6"/>
+<rect x="140" y="90" width="10" height="10" fill="#1e140f"/>
+<rect x="60" y="100" width="10" height="10" fill="#1e140f"/>
+<rect x="70" y="100" width="10" height="10" fill="#e67030"/>
+<rect x="80" y="100" width="20" height="10" fill="#ff9146"/>
+<rect x="100" y="100" width="40" height="10" fill="#1e140f"/>
+<rect x="70" y="110" width="10" height="10" fill="#1e140f"/>
+<rect x="80" y="110" width="10" height="10" fill="#ffb266"/>
+<rect x="90" y="110" width="10" height="10" fill="#1e140f"/>
+<rect x="80" y="120" width="10" height="10" fill="#1e140f"/>
+</svg>
+  </div>
+  mofish.co.uk — built for your next break<br>
+  <a href="mailto:mofishgames@yahoo.com" style="color:var(--teal-bright); text-decoration:none;">mofishgames@yahoo.com</a>
+  <div style="margin-top:14px; opacity:0.6; font-size:0.75rem;">&copy; 2026 Mofish. All rights reserved.</div>
+</footer>
+
 </body>
 </html>
