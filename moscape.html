@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Moscape</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #061420;
+    font-family: 'Trebuchet MS', 'Segoe UI', Arial, sans-serif;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+  }
+  #wrap {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; width: 100%;
+  }
+  #stage {
+    position: relative;
+    width: min(100%, 900px, calc((100vh - 16px) * 1.8));
+    aspect-ratio: 900 / 500;
+  }
+  #rotatePrompt {
+    display: none;
+    position: fixed; inset: 0;
+    background: #061420;
+    color: #fff3d6;
+    z-index: 999;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 30px;
+    font-size: 18px;
+  }
+  #rotatePrompt .spin-icon { font-size: 42px; margin-bottom: 16px; animation: spinHint 1.6s ease-in-out infinite; }
+  @keyframes spinHint {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(90deg); }
+  }
+  @media screen and (max-aspect-ratio: 1/1) and (max-width: 700px) {
+    #wrap { display: none; }
+    #rotatePrompt { display: flex; }
+  }
+  canvas {
+    width: 100%; height: 100%;
+    display: block;
+    background: #08283f;
+    border: 3px solid #06202f;
+    image-rendering: pixelated;
+  }
+  #hud {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 10px 14px;
+    pointer-events: none;
+    color: #eaf6f6;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
+    font-size: clamp(11px, 1.6vw, 15px);
+    font-weight: bold;
+  }
+  #hearts { display: flex; gap: 4px; }
+  .heart { width: 16px; height: 16px; }
+  #boostBarOuter {
+    width: 110px; height: 12px;
+    border: 2px solid #1e1410;
+    background: rgba(0,0,0,0.4);
+    margin-top: 4px;
+  }
+  #boostBarInner {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #4ecdc4, #a8ebe5);
+    transition: width 0.1s linear;
+  }
+  #progressBarOuter {
+    width: 140px; height: 8px;
+    border: 2px solid #1e1410;
+    background: rgba(0,0,0,0.4);
+    margin-top: 4px;
+  }
+  #progressBarInner {
+    height: 100%; width: 0%;
+    background: #ff9146;
+  }
+  #overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(6, 20, 32, 0.88);
+    color: #fff3d6;
+    text-align: center;
+    padding: 20px;
+  }
+  #overlay.hidden { display: none; }
+  #overlay h1 {
+    font-size: clamp(20px, 4vw, 32px);
+    margin: 0 0 12px;
+    color: #ff9146;
+  }
+  #overlay p { font-size: clamp(13px, 2.2vw, 16px); margin: 4px 0; max-width: 480px; }
+  #overlay button {
+    margin-top: 18px;
+    background: #ff9146;
+    color: #1e1410;
+    border: 3px solid #1e1410;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.4);
+    font-weight: 800;
+    font-size: 15px;
+    padding: 10px 26px;
+    cursor: pointer;
+  }
+  #overlay button:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 rgba(0,0,0,0.4); }
+  #hint {
+    position: absolute; bottom: 8px; left: 0; right: 0;
+    text-align: center;
+    color: rgba(234,246,246,0.65);
+    font-size: clamp(10px, 1.6vw, 12px);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="rotatePrompt">
+  <div class="spin-icon">📱</div>
+  <div><strong>Rotate your phone to landscape</strong><br>Moscape plays best sideways.</div>
+</div>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="game" width="900" height="500"></canvas>
+    <div id="hud">
+      <div>
+        <div id="levelLabel">LEVEL 1 / 10</div>
+        <div id="hearts"></div>
+      </div>
+      <div style="text-align:right;">
+        <div>BOOST</div>
+        <div id="boostBarOuter"><div id="boostBarInner"></div></div>
+        <div style="margin-top:6px;">PROGRESS</div>
+        <div id="progressBarOuter"><div id="progressBarInner"></div></div>
+      </div>
+    </div>
+    <div id="hint">TAP / CLICK / SPACE to swim up &nbsp;•&nbsp; HOLD to boost</div>
+    <div id="overlay">
+      <h1 id="overlayTitle">Moscape</h1>
+      <p id="overlayText">Swim through the rocks, dodge the reef life, and make it home.</p>
+      <button id="overlayButton">Start Swimming</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+// ============================== SPRITES ==============================
+function makeSprite(rows, palette, outlineHex) {
+  const GH = rows.length, GW = rows[0].length;
+  const outline = [];
+  for (let y=0;y<GH;y++){
+    outline.push(new Array(GW).fill(false));
+  }
+  for (let y=0;y<GH;y++){
+    for (let x=0;x<GW;x++){
+      if (rows[y][x] === '.') continue;
+      let isOutline = false;
+      const deltas = [[-1,0],[1,0],[0,-1],[0,1]];
+      for (const [dx,dy] of deltas){
+        const nx=x+dx, ny=y+dy;
+        if (nx<0||nx>=GW||ny<0||ny>=GH||rows[ny][nx]==='.'){ isOutline = true; break; }
+      }
+      outline[y][x] = isOutline;
+    }
+  }
+  return { rows, palette, outline, GW, GH, outlineHex };
+}
+
+function drawSprite(ctx, sprite, x, y, cell, flip) {
+  const { rows, palette, outline, GW, GH, outlineHex } = sprite;
+  for (let ry=0; ry<GH; ry++){
+    for (let rx=0; rx<GW; rx++){
+      const ch = rows[ry][rx];
+      if (ch === '.') continue;
+      const color = outline[ry][rx] ? outlineHex : palette[ch];
+      const drawX = flip ? (GW-1-rx) : rx;
+      ctx.fillStyle = color;
+      ctx.fillRect(x + drawX*cell, y + ry*cell, cell, cell);
+    }
+  }
+}
+
+const OUTLINE_HEX = "#1e140f";
+
+const MO_ROWS = [
+  "........a.............",
+  ".......aaa............",
+  "......aaaaa...........",
+  "......bbbbbbbb........",
+  ".....bbbbbbbbbb.......",
+  "..aabbbbbbbccbbb......",
+  "aaaabbbbbbbcdbbb......",
+  "aaaabbbbbeeeeeeb......",
+  "..aaffffeegeeeeb......",
+  ".....fffeeeeeeb.......",
+  "......ffbbbbbb........",
+  ".......aaa............",
+  "........a.............",
+];
+const MO_PALETTE = { a:"#ffb266", b:"#ff9146", c:"#ffffff", d:"#141419", e:"#ffe9c6", f:"#e67030", g:"#ffb496" };
+const MO_SPRITE = makeSprite(MO_ROWS, MO_PALETTE, OUTLINE_HEX);
+
+const JELLY_ROWS = [
+  "....KKKKKK....",
+  "..KPPPPPPPPK..",
+  ".KPPPPPPPPPPK.",
+  "KPPWPPPPWPPPK.",
+  "KPPPPPPPPPPPK.",
+  ".KPPPPPPPPPK..",
+  "..KKKKKKKKK...",
+  "...T.T.T.T....",
+  "..T..T.T..T...",
+  ".T....T....T..",
+];
+const JELLY_PALETTE = { P:"#d889e6", W:"#ffffff", T:"#d889e6" };
+const JELLY_SPRITE = makeSprite(JELLY_ROWS, JELLY_PALETTE, "#5f286e");
+
+const EEL_ROWS = [
+  ".......................",
+  "..KKKK.................",
+  ".KYYYYK................",
+  "KYWYEYYKK..............",
+  "KYYYYYYYKKK............",
+  ".KYYYYYYYYKK...........",
+  "..KKYYYYYYYKK..........",
+  ".....KKYYYYYYKK........",
+  "........KKYYYYYYKK.....",
+  "...........KKYYYYYYKK..",
+  "..............KKYYYYYK.",
+  ".................KKYYK.",
+  "....................KK.",
+];
+const EEL_PALETTE = { Y:"#dfd62f", W:"#ffffff", E:"#141414" };
+const EEL_SPRITE = makeSprite(EEL_ROWS, EEL_PALETTE, "#231e0a");
+
+const CRAB_ROWS = [
+  ".K.......K.....",
+  "KK.......KK....",
+  ".KKKKKKKKKK....",
+  "KRRRRRRRRRRK...",
+  "KRRRRRRRRRRRK..",
+  "KKRRRWRWRRRKK..",
+  ".KRRRRRRRRRK...",
+  "KK.KKKKKKK.KK..",
+  "K...........K..",
+];
+const CRAB_PALETTE = { R:"#de4a36", W:"#141414" };
+const CRAB_SPRITE = makeSprite(CRAB_ROWS, CRAB_PALETTE, "#641404");
+
+const BUBBLE_ROWS = [
+  "..KKK..",
+  ".KWWWK.",
+  "KWWWWWK",
+  "KWWWWWK",
+  "KWWWWWK",
+  ".KWWWK.",
+  "..KKK..",
+];
+const BUBBLE_PALETTE = { W:"#d2f5fa" };
+const BUBBLE_SPRITE = makeSprite(BUBBLE_ROWS, BUBBLE_PALETTE, "#64c8d2");
+
+// ============================== SEEDED RNG ==============================
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ============================== LEVEL CONFIG ==============================
+const CANVAS_W = 900, CANVAS_H = 500;
+const PLAYER_X = 160;
+const CEILING = 20, FLOOR = CANVAS_H - 20;
+
+const LEVEL_CONFIGS = [
+  { speed: 2.4, gapMin: 210, gapMax: 250, spacingMin: 430, spacingMax: 490, length: 4200, enemies: [] },
+  { speed: 2.7, gapMin: 195, gapMax: 235, spacingMin: 410, spacingMax: 470, length: 4600, enemies: ["jelly"] },
+  { speed: 2.9, gapMin: 185, gapMax: 225, spacingMin: 400, spacingMax: 460, length: 5000, enemies: ["jelly","eel"] },
+  { speed: 3.1, gapMin: 175, gapMax: 215, spacingMin: 390, spacingMax: 450, length: 5300, enemies: ["jelly","eel","crab"] },
+  { speed: 3.3, gapMin: 168, gapMax: 205, spacingMin: 380, spacingMax: 440, length: 5600, enemies: ["jelly","eel","crab"] },
+  { speed: 3.5, gapMin: 160, gapMax: 198, spacingMin: 370, spacingMax: 430, length: 5900, enemies: ["jelly","eel","crab"] },
+  { speed: 3.7, gapMin: 155, gapMax: 190, spacingMin: 360, spacingMax: 420, length: 6200, enemies: ["eel","crab"] },
+  { speed: 3.9, gapMin: 150, gapMax: 185, spacingMin: 350, spacingMax: 410, length: 6500, enemies: ["jelly","eel","crab"] },
+  { speed: 4.1, gapMin: 145, gapMax: 178, spacingMin: 340, spacingMax: 400, length: 6800, enemies: ["jelly","eel","crab"] },
+  { speed: 4.4, gapMin: 140, gapMax: 172, spacingMin: 330, spacingMax: 390, length: 7200, enemies: ["jelly","eel","crab"] },
+];
+const TOTAL_LEVELS = LEVEL_CONFIGS.length;
+
+function generateLevel(levelIndex) {
+  const cfg = LEVEL_CONFIGS[levelIndex];
+  const rand = mulberry32(1000 + levelIndex * 97);
+  const obstacles = [];
+  const bubbles = [];
+  const enemies = [];
+  let x = 700;
+  while (x < cfg.length - 300) {
+    const gapHeight = cfg.gapMin + rand() * (cfg.gapMax - cfg.gapMin);
+    const minCenter = CEILING + gapHeight/2 + 20;
+    const maxCenter = FLOOR - gapHeight/2 - 20;
+    const gapY = minCenter + rand() * Math.max(1, (maxCenter - minCenter));
+    const obstacle = { x, gapY, gapHeight, width: 60, crab: null, passed: false };
+
+    // occasionally attach a crab to this obstacle's bottom rock (if crabs enabled this level)
+    if (cfg.enemies.includes("crab") && rand() < 0.5) {
+      obstacle.crab = { lastThrow: -99999, alive: true };
+    }
+    obstacles.push(obstacle);
+
+    // bubble near the gap center, slightly offset, roughly every other gate
+    if (rand() < 0.6) {
+      bubbles.push({ x: x + 30, y: gapY + (rand()-0.5)*gapHeight*0.4, collected: false, r: 12 });
+    }
+
+    const spacing = cfg.spacingMin + rand() * (cfg.spacingMax - cfg.spacingMin);
+
+    // Strategic jellyfish: placed just past this gate, near the gap's vertical band, so
+    // threading the gate isn't the end of the challenge - a jelly may be waiting right after it.
+    if (cfg.enemies.includes("jelly") && rand() < 0.45) {
+      enemies.push({
+        type: "jelly",
+        x: x + obstacle.width/2 + 90 + rand()*60,
+        baseY: gapY + (rand()-0.5)*gapHeight*0.5,
+        phase: rand()*Math.PI*2,
+        alive: true,
+      });
+    }
+
+    // Eels roam the open stretch between gates, where there's room for their wide sweep
+    if (cfg.enemies.includes("eel") && spacing > 380 && rand() < 0.5) {
+      enemies.push({
+        type: "eel",
+        x: x + obstacle.width/2 + spacing*0.5,
+        baseY: CEILING + 90 + rand()*(FLOOR-CEILING-180),
+        phase: rand()*Math.PI*2,
+        alive: true,
+      });
+    }
+
+    x += spacing;
+  }
+
+  return {
+    length: cfg.length,
+    speed: cfg.speed,
+    obstacles,
+    bubbles,
+    enemies,
+  };
+}
+
+// ============================== GAME STATE ==============================
+let canvas, ctx;
+let state = "ready"; // ready, intro, playing, entering, levelComplete, gameOver, win
+let levelIndex = 0;
+let lives = 3;
+let level = null;
+let progress = 0; // world-scroll distance travelled this level
+let player = { y: CANVAS_H/2, vy: 0 };
+let boost = 100;
+let holding = false;
+let holdStartTime = 0;
+let projectiles = []; // {x,y,vx,vy}
+let deathReason = null;
+let elapsedMs = 0;
+let lastFrameTime = 0;
+let score = 0;
+let introStart = 0;
+let enteringStart = 0;
+let enterProgress = 0;
+let hitFlashStart = -99999;
+let shakeUntil = -99999;
+let comboCount = 0;
+let comboPopups = []; // {x, y, text, createdAt}
+const INTRO_DURATION = 2400;
+const ENTER_DURATION = 950;
+const CLOSE_CALL_PX = 22; // clearance under this counts as a "close call" for bonus score
+
+const GRAVITY = 0.34;
+const FLAP_IMPULSE = -6.4;
+const MAX_FALL = 6.2;
+const MAX_RISE = -7.2;
+const BOOST_DRAIN_PER_SEC = 32;
+const BOOST_SPEED_MULT = 1.55;
+const BOOST_GRAVITY_MULT = 0.35;
+const BUBBLE_BOOST_VALUE = 26;
+
+function resetLevel(idx) {
+  levelIndex = idx;
+  level = generateLevel(idx);
+  progress = 0;
+  player.y = CANVAS_H/2;
+  player.vy = 0;
+  boost = 100;
+  projectiles = [];
+  deathReason = null;
+  enterProgress = 0;
+  comboCount = 0;
+  comboPopups = [];
+  for (const o of level.obstacles) { o.passed = false; if (o.crab) o.crab.lastThrow = -99999; }
+  for (const b of level.bubbles) b.collected = false;
+  for (const e of level.enemies) e.alive = true;
+}
+
+function startGame() {
+  lives = 3;
+  score = 0;
+  resetLevel(0);
+  state = "intro";
+  introStart = elapsedMs;
+}
+
+function loseLife(reason) {
+  if (state !== "playing") return;
+  lives--;
+  deathReason = reason;
+  hitFlashStart = elapsedMs;
+  shakeUntil = elapsedMs + 300;
+  comboCount = 0;
+  if (lives <= 0) {
+    state = "gameOver";
+  } else {
+    resetLevel(levelIndex);
+    state = "playing";
+  }
+}
+
+function completeLevel() {
+  score += 100 + levelIndex * 20;
+  if (levelIndex >= TOTAL_LEVELS - 1) {
+    state = "win";
+  } else {
+    state = "levelComplete";
+  }
+}
+
+function advanceToNextLevel() {
+  resetLevel(levelIndex + 1);
+  state = "playing";
+}
+
+// ============================== INPUT ==============================
+function onDown() {
+  if (state === "playing") {
+    player.vy = FLAP_IMPULSE;
+    holding = true;
+    holdStartTime = elapsedMs;
+  } else if (state === "ready") {
+    startGame();
+  } else if (state === "intro") {
+    state = "playing"; // tap to skip the intro cinematic
+  } else if (state === "levelComplete") {
+    advanceToNextLevel();
+  } else if (state === "gameOver" || state === "win") {
+    // handled by button
+  }
+}
+function onUp() {
+  holding = false;
+}
+
+// ============================== COLLISION HELPERS ==============================
+function circleRectOverlap(cx, cy, r, rx, ry, rw, rh) {
+  const closestX = Math.max(rx, Math.min(cx, rx+rw));
+  const closestY = Math.max(ry, Math.min(cy, ry+rh));
+  const dx = cx - closestX, dy = cy - closestY;
+  return (dx*dx + dy*dy) < r*r;
+}
+function circleCircleOverlap(x1,y1,r1,x2,y2,r2) {
+  const dx=x1-x2, dy=y1-y2;
+  return (dx*dx+dy*dy) < (r1+r2)*(r1+r2);
+}
+
+const PLAYER_HALF_W = 40, PLAYER_HALF_H = 22; // collision box (inset from sprite bounds)
+
+// ============================== UPDATE ==============================
+function update(dtMs) {
+  if (state === "intro") {
+    if (elapsedMs - introStart >= INTRO_DURATION) {
+      state = "playing";
+    }
+    return;
+  }
+  if (state === "entering") {
+    enterProgress = Math.min(1, (elapsedMs - enteringStart) / ENTER_DURATION);
+    if (enterProgress >= 1) {
+      completeLevel();
+    }
+    return;
+  }
+  if (state !== "playing") return;
+  const dt = dtMs / 16.6667; // normalize to ~60fps steps
+
+  // boost logic
+  const wantsBoost = holding && boost > 0;
+  const gravityMult = wantsBoost ? BOOST_GRAVITY_MULT : 1;
+  const speedMult = wantsBoost ? BOOST_SPEED_MULT : 1;
+  if (wantsBoost) {
+    boost -= (BOOST_DRAIN_PER_SEC/60) * dt;
+    if (boost < 0) boost = 0;
+  }
+
+  player.vy += GRAVITY * gravityMult * dt;
+  if (player.vy > MAX_FALL) player.vy = MAX_FALL;
+  if (player.vy < MAX_RISE) player.vy = MAX_RISE;
+  player.y += player.vy * dt;
+
+  // ceiling / floor collision
+  if (player.y - PLAYER_HALF_H < CEILING || player.y + PLAYER_HALF_H > FLOOR) {
+    loseLife("boundary");
+    return;
+  }
+
+  const scrollDelta = level.speed * speedMult * dt;
+  progress += scrollDelta;
+
+  // update projectiles (crab-thrown rocks)
+  for (const p of projectiles) {
+    p.x += p.vx * dt;
+  }
+  projectiles = projectiles.filter(p => p.x < CANVAS_W + 50);
+
+  // collisions: obstacles
+  for (const o of level.obstacles) {
+    const screenX = o.x - progress + PLAYER_X;
+    if (screenX < -100 || screenX > CANVAS_W + 100) continue;
+    const topRectH = o.gapY - o.gapHeight/2 - CEILING;
+    const botRectY = o.gapY + o.gapHeight/2;
+    const botRectH = FLOOR - botRectY;
+    if (circleRectOverlap(PLAYER_X, player.y, PLAYER_HALF_H, screenX - o.width/2, CEILING, o.width, topRectH) ||
+        circleRectOverlap(PLAYER_X, player.y, PLAYER_HALF_H, screenX - o.width/2, botRectY, o.width, botRectH)) {
+      loseLife("rock");
+      return;
+    }
+    // near-miss / close-call scoring: the moment Mo threads this gate, check how tight it was
+    if (!o.passed && screenX <= PLAYER_X) {
+      o.passed = true;
+      const clearanceTop = (player.y - PLAYER_HALF_H) - (o.gapY - o.gapHeight/2);
+      const clearanceBot = (botRectY) - (player.y + PLAYER_HALF_H);
+      const clearance = Math.min(clearanceTop, clearanceBot);
+      if (clearance >= 0 && clearance < CLOSE_CALL_PX) {
+        comboCount++;
+        const bonus = 20 + comboCount * 5;
+        score += bonus;
+        comboPopups.push({ x: PLAYER_X, y: player.y - 40, text: `Close call! +${bonus}`, createdAt: elapsedMs });
+      } else {
+        comboCount = 0;
+      }
+    }
+    // crab sitting on this obstacle
+    if (o.crab && o.crab.alive) {
+      const crabScreenX = screenX;
+      const crabScreenY = botRectY - 6;
+      if (circleCircleOverlap(PLAYER_X, player.y, PLAYER_HALF_H*0.8, crabScreenX, crabScreenY, 16)) {
+        loseLife("crab");
+        return;
+      }
+      if (elapsedMs - o.crab.lastThrow > 2600 && screenX < CANVAS_W && screenX > 100) {
+        o.crab.lastThrow = elapsedMs;
+        // Projectiles live in SCREEN-space (not world-space), unlike obstacles/enemies which scroll with `progress`.
+        projectiles.push({ x: crabScreenX, y: crabScreenY, vx: -1.5, vy: -4.2, isRock: true, spawnY: crabScreenY });
+      }
+    }
+  }
+
+  // rock-projectile gravity (thrown rocks arc)
+  for (const p of projectiles) {
+    if (p.isRock) {
+      p.vy += 0.25 * dt;
+      p.y += p.vy * dt;
+    }
+  }
+
+  // collisions: projectiles vs player (projectiles are already in screen-space, no progress offset)
+  for (const p of projectiles) {
+    if (circleCircleOverlap(PLAYER_X, player.y, PLAYER_HALF_H*0.8, p.x, p.y, p.isRock ? 10 : 16)) {
+      loseLife("crabrock");
+      return;
+    }
+  }
+
+  // collisions: enemies
+  for (const e of level.enemies) {
+    if (!e.alive) continue;
+    const screenX = e.x - progress + PLAYER_X;
+    if (screenX < -100 || screenX > CANVAS_W + 100) continue;
+    let ey = e.baseY;
+    if (e.type === "jelly") ey = e.baseY + Math.sin((elapsedMs/900) + e.phase) * 30;
+    else if (e.type === "eel") ey = e.baseY + Math.sin((elapsedMs/500) + e.phase) * 70;
+    e._screenY = ey;
+    const radius = e.type === "jelly" ? 22 : 18;
+    if (circleCircleOverlap(PLAYER_X, player.y, PLAYER_HALF_H*0.8, screenX, ey, radius)) {
+      loseLife(e.type);
+      return;
+    }
+  }
+
+  // bubbles
+  for (const b of level.bubbles) {
+    if (b.collected) continue;
+    const screenX = b.x - progress + PLAYER_X;
+    if (circleCircleOverlap(PLAYER_X, player.y, PLAYER_HALF_H*0.8, screenX, b.y, b.r)) {
+      b.collected = true;
+      boost = Math.min(100, boost + BUBBLE_BOOST_VALUE);
+    }
+  }
+
+  // clean up expired close-call popups
+  comboPopups = comboPopups.filter(p => elapsedMs - p.createdAt < 900);
+
+  // level completion: swim into the cave first, then show the level-complete overlay
+  if (progress >= level.length) {
+    state = "entering";
+    enteringStart = elapsedMs;
+    enterProgress = 0;
+  }
+}
+
+// ============================== DRAW ==============================
+function drawBackground() {
+  const grad = ctx.createLinearGradient(0,0,0,CANVAS_H);
+  grad.addColorStop(0, "#0d3a54");
+  grad.addColorStop(0.55, "#0a2a3f");
+  grad.addColorStop(1, "#03121c");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+
+  const prog = (state === "playing" || state === "levelComplete") ? progress : elapsedMs*0.05;
+
+  // distant light rays from the surface, drifting slowly
+  ctx.save();
+  ctx.globalAlpha = 0.07;
+  for (let i=0;i<4;i++){
+    const rx = ((i*260 + elapsedMs/40) % (CANVAS_W+300)) - 150;
+    ctx.fillStyle = "#dff3fa";
+    ctx.beginPath();
+    ctx.moveTo(rx, 0);
+    ctx.lineTo(rx+70, 0);
+    ctx.lineTo(rx-40, CANVAS_H);
+    ctx.lineTo(rx-140, CANVAS_H);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // far background silhouette hills (slow parallax, sense of depth)
+  ctx.fillStyle = "rgba(10,35,50,0.55)";
+  const parallax1 = prog * 0.12;
+  ctx.beginPath();
+  ctx.moveTo(-50, CANVAS_H);
+  for (let x=-50; x<=CANVAS_W+50; x+=40) {
+    const hy = CANVAS_H - 60 - Math.abs(Math.sin((x+parallax1)/140))*50;
+    ctx.lineTo(x, hy);
+  }
+  ctx.lineTo(CANVAS_W+50, CANVAS_H);
+  ctx.closePath();
+  ctx.fill();
+
+  // mid background coral/rock silhouettes (medium parallax)
+  ctx.fillStyle = "rgba(15,45,60,0.6)";
+  const parallax2 = prog * 0.35;
+  for (let i=0;i<6;i++){
+    const bx = (i*260 - (parallax2 % 1560));
+    const bh = 30 + (i%3)*18;
+    ctx.beginPath();
+    ctx.moveTo(bx, CANVAS_H);
+    ctx.lineTo(bx+14, CANVAS_H-bh);
+    ctx.lineTo(bx+28, CANVAS_H-bh*0.6);
+    ctx.lineTo(bx+42, CANVAS_H-bh*1.1);
+    ctx.lineTo(bx+56, CANVAS_H);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // swaying seaweed near the floor (closer parallax, more foreground-like)
+  const parallax3 = prog * 0.7;
+  for (let i=0;i<10;i++){
+    const bx = (i*95 - (parallax3 % 950));
+    const sway = Math.sin(elapsedMs/700 + i) * 10;
+    const bladeH = 34 + (i%4)*10;
+    ctx.strokeStyle = "rgba(40,110,80,0.55)";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(bx, CANVAS_H);
+    ctx.quadraticCurveTo(bx+sway, CANVAS_H-bladeH*0.6, bx+sway*1.4, CANVAS_H-bladeH);
+    ctx.stroke();
+  }
+
+  // drifting distant fish silhouettes (purely decorative, non-interactive)
+  ctx.fillStyle = "rgba(6,20,30,0.5)";
+  for (let i=0;i<3;i++){
+    const fx = ((i*310 + elapsedMs/30) % (CANVAS_W+200)) - 100;
+    const fy = 70 + i*90 + Math.sin(elapsedMs/900+i)*14;
+    ctx.beginPath();
+    ctx.ellipse(fx, fy, 10, 5, 0, 0, Math.PI*2);
+    ctx.moveTo(fx-10, fy);
+    ctx.lineTo(fx-18, fy-5);
+    ctx.lineTo(fx-18, fy+5);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // drifting bubbles for atmosphere
+  ctx.fillStyle = "rgba(200,235,240,0.15)";
+  for (let i=0;i<14;i++){
+    const bx = (i*137 + (elapsedMs/25)) % (CANVAS_W+40) - 20;
+    const by = (CANVAS_H - ((i*97 + elapsedMs/12) % CANVAS_H));
+    ctx.beginPath();
+    ctx.arc(bx, by, 3 + (i%3), 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+function seededNoise(seed, i, phase) {
+  return Math.sin(seed*3.1 + i*1.7 + phase) * 0.5 + Math.sin(seed*7.3 + i*2.9 + phase*1.3) * 0.3;
+}
+
+function drawRockColumn(screenX, yTop, height, baseWidth, seed, pointingDown) {
+  if (height <= 0) return;
+  const mossy = (Math.floor(seed*97) % 3) === 0; // ~1/3 of rocks get a mossy green-brown variant for visual variety
+  const palette = mossy
+    ? { base: "#5a5230", mid: "#4a4426", dark: "#3a3520", crown: "#5a5230", speck: "#6b6238" }
+    : { base: "#5c4a3a", mid: "#4a3a2c", dark: "#3a2d22", crown: "#5c4a3a", speck: "#6b5645" };
+
+  const segments = Math.max(5, Math.floor(height/20));
+  const segH = height/segments;
+  const leftPts = [], rightPts = [];
+  for (let i=0;i<=segments;i++){
+    const y = yTop + i*segH;
+    const bulgeL = seededNoise(seed, i, 0) * baseWidth*0.22;
+    const bulgeR = seededNoise(seed, i, 11) * baseWidth*0.22;
+    leftPts.push({ x: screenX - baseWidth/2 + bulgeL, y });
+    rightPts.push({ x: screenX + baseWidth/2 + bulgeR, y });
+  }
+
+  // organic filled silhouette (undulating sides, not a straight-edged rectangle)
+  ctx.fillStyle = palette.base;
+  ctx.beginPath();
+  ctx.moveTo(leftPts[0].x, leftPts[0].y);
+  for (const p of leftPts) ctx.lineTo(p.x, p.y);
+  for (let i=rightPts.length-1;i>=0;i--) ctx.lineTo(rightPts[i].x, rightPts[i].y);
+  ctx.closePath();
+  ctx.fill();
+
+  // horizontal strata bands for rock texture
+  ctx.save();
+  ctx.clip();
+  ctx.fillStyle = palette.mid;
+  for (let stripe=0; stripe<height; stripe+=17) {
+    ctx.fillRect(screenX-baseWidth, yTop+stripe, baseWidth*2, 5);
+  }
+  // small darker speckles for texture
+  ctx.fillStyle = palette.speck;
+  for (let i=0;i<Math.floor(height/14); i++){
+    const sx = screenX - baseWidth/2 + (Math.abs(Math.sin(seed*5+i*3.3))*baseWidth);
+    const sy = yTop + (i*14) + 6;
+    ctx.fillRect(sx, sy, 4, 4);
+  }
+  ctx.restore();
+
+  // jagged crown at the gap-facing tip, blended into the organic sides (varied tooth heights)
+  const teeth = 5 + (Math.floor(seed*13) % 3);
+  const toothW = baseWidth/teeth;
+  ctx.fillStyle = palette.crown;
+  for (let t=0;t<teeth;t++){
+    const rnd = Math.abs(Math.sin(seed*13.13 + t*7.77));
+    const toothH = mossy ? (8 + rnd*12) : (10 + rnd*20);
+    const tx = screenX - baseWidth/2 + t*toothW;
+    ctx.beginPath();
+    if (pointingDown) {
+      ctx.moveTo(tx, yTop+height);
+      ctx.lineTo(tx+toothW/2, yTop+height+toothH);
+      ctx.lineTo(tx+toothW, yTop+height);
+    } else {
+      ctx.moveTo(tx, yTop);
+      ctx.lineTo(tx+toothW/2, yTop-toothH);
+      ctx.lineTo(tx+toothW, yTop);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // subtle outline along the organic silhouette (not a hard rectangle border)
+  ctx.strokeStyle = palette.dark;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(leftPts[0].x, leftPts[0].y);
+  for (const p of leftPts) ctx.lineTo(p.x, p.y);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(rightPts[0].x, rightPts[0].y);
+  for (const p of rightPts) ctx.lineTo(p.x, p.y);
+  ctx.stroke();
+}
+
+function drawCaveMouth(screenX) {
+  const archW = 150, archTopY = CEILING + 20;
+  ctx.fillStyle = "#241d16";
+  ctx.beginPath();
+  ctx.moveTo(screenX-archW/2, FLOOR+20);
+  ctx.lineTo(screenX-archW/2, archTopY+40);
+  ctx.quadraticCurveTo(screenX, archTopY-20, screenX+archW/2, archTopY+40);
+  ctx.lineTo(screenX+archW/2, FLOOR+20);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#3a2f22";
+  ctx.beginPath();
+  ctx.moveTo(screenX-archW/2, FLOOR+20);
+  ctx.lineTo(screenX-archW/2, archTopY+40);
+  ctx.quadraticCurveTo(screenX, archTopY-20, screenX+archW/2, archTopY+40);
+  ctx.lineTo(screenX+archW/2-14, archTopY+46);
+  ctx.quadraticCurveTo(screenX, archTopY-4, screenX-archW/2+14, archTopY+46);
+  ctx.closePath();
+  ctx.fill();
+  const innerW = archW*0.6;
+  ctx.fillStyle = "#050708";
+  ctx.beginPath();
+  ctx.moveTo(screenX-innerW/2, FLOOR+20);
+  ctx.lineTo(screenX-innerW/2, archTopY+55);
+  ctx.quadraticCurveTo(screenX, archTopY+15, screenX+innerW/2, archTopY+55);
+  ctx.lineTo(screenX+innerW/2, FLOOR+20);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function draw() {
+  drawBackground();
+
+  if (state === "intro") {
+    const t = elapsedMs - introStart;
+    const emergeT = Math.min(1, t / 1400);
+    const easeEmerge = emergeT*emergeT*(3-2*emergeT);
+    const caveScreenX = PLAYER_X + 10;
+    drawCaveMouth(caveScreenX);
+
+    const moIdleY = CANVAS_H/2 + Math.sin(elapsedMs/500)*8;
+    const moScale = 1.4 + easeEmerge*2.6; // grows from small (inside cave) to full size
+    ctx.save();
+    ctx.translate(PLAYER_X, moIdleY);
+    ctx.rotate(Math.sin(elapsedMs/500)*0.05);
+    drawSprite(ctx, MO_SPRITE, -11*moScale, -6.5*moScale, moScale, false);
+    ctx.restore();
+
+    // dark vignette clearing as Mo emerges from the cave
+    ctx.fillStyle = `rgba(2,4,6,${(1-easeEmerge)*0.9})`;
+    ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
+    ctx.fillRect(0, CANVAS_H-64, CANVAS_W, 46);
+    ctx.fillStyle = "#fff3d6";
+    ctx.font = "bold 20px 'Trebuchet MS', sans-serif";
+    ctx.textAlign = "center";
+    const caption = t <= 1400 ? "Home." : "Time to explore the reef.";
+    ctx.fillText(caption, CANVAS_W/2, CANVAS_H-32);
+    ctx.textAlign = "left";
+    return;
+  }
+
+  const shaking = elapsedMs < shakeUntil;
+  if (shaking) {
+    const shakeMag = 5 * (shakeUntil - elapsedMs) / 300;
+    ctx.save();
+    ctx.translate((Math.random()-0.5)*shakeMag, (Math.random()-0.5)*shakeMag);
+  }
+
+  if (state === "playing" || state === "levelComplete" || state === "entering") {
+    // cave mouth, waiting at the end of the level
+    if (level) {
+      const caveScreenX = level.length - progress + PLAYER_X;
+      if (caveScreenX > -150 && caveScreenX < CANVAS_W + 150) {
+        drawCaveMouth(caveScreenX);
+      }
+    }
+
+    // obstacles
+    for (const o of level.obstacles) {
+      const screenX = o.x - progress + PLAYER_X;
+      if (screenX < -100 || screenX > CANVAS_W + 100) continue;
+      const topH = o.gapY - o.gapHeight/2 - CEILING;
+      drawRockColumn(screenX, CEILING, topH, o.width, o.x*0.01, true);
+      const botY = o.gapY + o.gapHeight/2;
+      drawRockColumn(screenX, botY, FLOOR-botY, o.width, o.x*0.01+3, false);
+      if (o.crab && o.crab.alive) {
+        drawSprite(ctx, CRAB_SPRITE, screenX-24, botY-24, 3, false);
+      }
+    }
+
+    // bubbles
+    for (const b of level.bubbles) {
+      if (b.collected) continue;
+      const screenX = b.x - progress + PLAYER_X;
+      if (screenX < -30 || screenX > CANVAS_W+30) continue;
+      const bob = Math.sin(elapsedMs/300 + b.x) * 4;
+      drawSprite(ctx, BUBBLE_SPRITE, screenX-10, b.y+bob-10, 3, false);
+    }
+
+    // enemies
+    for (const e of level.enemies) {
+      if (!e.alive) continue;
+      const screenX = e.x - progress + PLAYER_X;
+      if (screenX < -60 || screenX > CANVAS_W+60) continue;
+      const ey = e._screenY !== undefined ? e._screenY : e.baseY;
+      if (e.type === "jelly") drawSprite(ctx, JELLY_SPRITE, screenX-21, ey-21, 3, false);
+      else if (e.type === "eel") drawSprite(ctx, EEL_SPRITE, screenX-34, ey-19, 3, Math.sin(elapsedMs/500+e.phase) > 0);
+    }
+
+    // projectiles (crab-thrown rocks, screen-space already, no progress offset)
+    for (const p of projectiles) {
+      ctx.fillStyle = "#8a7a68";
+      ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = "#241a12"; ctx.lineWidth=2; ctx.stroke();
+    }
+
+    // close-call combo popups
+    for (const pu of comboPopups) {
+      const age = (elapsedMs - pu.createdAt) / 900;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - age);
+      ctx.fillStyle = "#ffd166";
+      ctx.font = "bold 16px 'Trebuchet MS', sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(pu.text, pu.x, pu.y - age*30);
+      ctx.restore();
+    }
+    ctx.textAlign = "left";
+
+    // Mo the player - swims forward into the cave mouth during the "entering" transition
+    const moDrawX = state === "entering" ? PLAYER_X + enterProgress*180 : PLAYER_X;
+    const moScale = state === "entering" ? 4 * (1 - enterProgress*0.5) : 4;
+    const tilt = state === "entering" ? 0 : Math.max(-18, Math.min(18, player.vy*3));
+    ctx.save();
+    ctx.translate(moDrawX, player.y);
+    ctx.rotate(tilt * Math.PI/180);
+    drawSprite(ctx, MO_SPRITE, -44*(moScale/4), -26*(moScale/4), moScale, false);
+    ctx.restore();
+
+    // darkening vignette as Mo swims into the cave
+    if (state === "entering") {
+      ctx.fillStyle = `rgba(2,4,6,${enterProgress*0.92})`;
+      ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+    }
+  }
+
+  if (shaking) ctx.restore();
+
+  // red hit-flash on taking damage
+  const flashT = Math.max(0, 1 - (elapsedMs - hitFlashStart) / 350);
+  if (flashT > 0) {
+    ctx.fillStyle = `rgba(200,20,20,${flashT*0.35})`;
+    ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+  }
+}
+
+// ============================== HUD ==============================
+function updateHUD() {
+  const levelLabel = document.getElementById("levelLabel");
+  const heartsEl = document.getElementById("hearts");
+  const boostInner = document.getElementById("boostBarInner");
+  const progInner = document.getElementById("progressBarInner");
+  if (levelLabel) levelLabel.textContent = `LEVEL ${levelIndex+1} / ${TOTAL_LEVELS}`;
+  if (heartsEl) {
+    heartsEl.innerHTML = "";
+    for (let i=0;i<3;i++){
+      const span = document.createElement("span");
+      span.textContent = i < lives ? "\u2764\ufe0f" : "\ud83e\udd0d";
+      heartsEl.appendChild(span);
+    }
+  }
+  if (boostInner) boostInner.style.width = boost + "%";
+  if (progInner && level) progInner.style.width = Math.min(100, (progress/level.length)*100) + "%";
+}
+
+function showOverlay(title, text, buttonText) {
+  const overlay = document.getElementById("overlay");
+  document.getElementById("overlayTitle").textContent = title;
+  document.getElementById("overlayText").innerHTML = text;
+  document.getElementById("overlayButton").textContent = buttonText;
+  overlay.classList.remove("hidden");
+}
+function hideOverlay() {
+  document.getElementById("overlay").classList.add("hidden");
+}
+
+const DEATH_MESSAGES = {
+  rock: "Ouch — right into the rocks.",
+  boundary: "Mo needs more room to swim than that.",
+  jelly: "That jellyfish was NOT a friend.",
+  eel: "Zapped by an electric eel!",
+  crab: "That crab was surprisingly territorial.",
+  crabrock: "Beaned by a crab-thrown rock.",
+};
+
+let prevState = null;
+function syncOverlay() {
+  if (state === prevState) return;
+  prevState = state;
+  if (state === "ready") {
+    showOverlay("Moscape", "Swim through the rocks, dodge the reef life, and make it home.", "Start Swimming");
+  } else if (state === "playing") {
+    hideOverlay();
+  } else if (state === "intro" || state === "entering") {
+    hideOverlay();
+  } else if (state === "levelComplete") {
+    showOverlay(`Level ${levelIndex+1} Complete!`, "Mo slips into the cave, safe for now.", levelIndex+1 >= TOTAL_LEVELS ? "Finish" : "Next Level");
+  } else if (state === "gameOver") {
+    showOverlay("Ouch!", (DEATH_MESSAGES[deathReason] || "The reef got the better of Mo this time.") + "<br>Score: " + score, "Try Again");
+  } else if (state === "win") {
+    showOverlay("Mo Made It Home!", "All 10 levels beaten - safe and sound.<br>Final Score: " + score, "Play Again");
+  }
+}
+
+// ============================== MAIN LOOP ==============================
+function frame(ts) {
+  if (!lastFrameTime) lastFrameTime = ts;
+  const dtMs = Math.min(50, ts - lastFrameTime); // clamp to avoid huge jumps on tab-switch
+  lastFrameTime = ts;
+  elapsedMs += dtMs;
+
+  update(dtMs);
+  draw();
+  updateHUD();
+  syncOverlay();
+
+  requestAnimationFrame(frame);
+}
+
+// ============================== INIT / EVENTS ==============================
+function init() {
+  canvas = document.getElementById("game");
+  ctx = canvas.getContext("2d");
+
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "Space") { e.preventDefault(); onDown(); }
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.code === "Space") { onUp(); }
+  });
+  canvas.addEventListener("mousedown", onDown);
+  window.addEventListener("mouseup", onUp);
+  canvas.addEventListener("touchstart", (e) => { e.preventDefault(); onDown(); }, { passive: false });
+  canvas.addEventListener("touchend", (e) => { e.preventDefault(); onUp(); }, { passive: false });
+
+  document.getElementById("overlayButton").addEventListener("click", () => {
+    if (state === "ready") startGame();
+    else if (state === "levelComplete") advanceToNextLevel();
+    else if (state === "gameOver" || state === "win") startGame();
+  });
+
+  requestAnimationFrame(frame);
+}
+
+if (typeof window !== "undefined" && typeof document !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+}
+
+// expose for headless testing
+if (typeof module !== "undefined") {
+  module.exports = {};
+}
+window.__MO_ESCAPE_TEST__ = {
+  getState: () => state,
+  setState: (s) => { state = s; },
+  startGame, resetLevel, update, loseLife, completeLevel, advanceToNextLevel,
+  getPlayer: () => player,
+  getLevel: () => level,
+  getLevelIndex: () => levelIndex,
+  getLives: () => lives,
+  getBoost: () => boost,
+  getProgress: () => progress,
+  setProgress: (p) => { progress = p; },
+  setHolding: (h) => { holding = h; },
+  generateLevel,
+  LEVEL_CONFIGS,
+  getProjectiles: () => projectiles,
+  setElapsed: (t) => { elapsedMs = t; },
+  getElapsed: () => elapsedMs,
+  getElapsedMs: () => elapsedMs,
+  getEnterProgress: () => enterProgress,
+  getIntroStart: () => introStart,
+  getCombo: () => comboCount,
+  getComboPopups: () => comboPopups,
+  getHitFlashStart: () => hitFlashStart,
+  getShakeUntil: () => shakeUntil,
+};
+
+})();
+</script>
+</body>
+</html>
