@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Village Defense (Prototype)</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1a1408;
+    font-family: 'Trebuchet MS', 'Segoe UI', Arial, sans-serif;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+  }
+  #wrap {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; width: 100%;
+  }
+  #stage {
+    position: relative;
+    width: min(100%, 900px, calc((100vh - 16px) * 1.8));
+    aspect-ratio: 900 / 500;
+  }
+  canvas {
+    width: 100%; height: 100%;
+    display: block;
+    background: #4a7a3a;
+    border: 3px solid #2a1f10;
+    image-rendering: pixelated;
+    cursor: crosshair;
+  }
+  #hud {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 8px 12px;
+    pointer-events: none;
+    color: #fff3d6;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+    font-size: clamp(11px, 1.6vw, 14px);
+    font-weight: bold;
+  }
+  #hearts { display: flex; gap: 3px; margin-top: 2px; }
+  #waveInfo { text-align: right; }
+  #weaponBar {
+    position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px;
+    pointer-events: auto;
+  }
+  .weapon-slot {
+    width: 56px; height: 56px;
+    background: rgba(20,15,8,0.75);
+    border: 3px solid #1e1410;
+    border-radius: 6px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer;
+    position: relative;
+  }
+  .weapon-slot.active { border-color: #ffd166; box-shadow: 0 0 0 2px rgba(255,209,102,0.5); }
+  .weapon-slot.empty { opacity: 0.4; }
+  .weapon-slot svg { width: 28px; height: 28px; }
+  .weapon-count {
+    position: absolute; bottom: 1px; right: 3px;
+    color: #fff3d6; font-size: 11px; font-weight: bold;
+    text-shadow: 1px 1px 1px black;
+  }
+  #powerBarOuter {
+    position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%);
+    width: 160px; height: 10px;
+    border: 2px solid #1e1410;
+    background: rgba(0,0,0,0.4);
+    display: none;
+  }
+  #powerBarInner {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #ffd166, #ff6b4a);
+  }
+  #overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(10, 8, 4, 0.88);
+    color: #fff3d6;
+    text-align: center;
+    padding: 20px;
+  }
+  #overlay.hidden { display: none; }
+  #overlay h1 { font-size: clamp(20px, 4vw, 30px); margin: 0 0 12px; color: #ffd166; }
+  #overlay p { font-size: clamp(13px, 2.2vw, 16px); margin: 4px 0; max-width: 500px; }
+  #overlay button {
+    margin-top: 16px;
+    background: #ffd166;
+    color: #2a1f10;
+    border: 3px solid #1e1410;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.4);
+    font-weight: 800;
+    font-size: 15px;
+    padding: 10px 26px;
+    cursor: pointer;
+  }
+  #overlay button:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 rgba(0,0,0,0.4); }
+  #hint {
+    position: absolute; top: 40px; left: 0; right: 0;
+    text-align: center;
+    color: rgba(255,243,214,0.7);
+    font-size: clamp(10px, 1.6vw, 12px);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="game" width="900" height="500"></canvas>
+    <div id="hud">
+      <div>
+        <div id="levelLabel">LEVEL 1 / 5</div>
+        <div id="hearts"></div>
+      </div>
+      <div id="waveInfo">
+        <div id="enemiesLeftLabel">Enemies: 0</div>
+      </div>
+    </div>
+    <div id="hint">Drag to aim &amp; charge power, release to throw</div>
+    <div id="powerBarOuter"><div id="powerBarInner"></div></div>
+    <div id="weaponBar"></div>
+    <div id="overlay">
+      <h1 id="overlayTitle">Village Defense</h1>
+      <p id="overlayText">Defend the farm! Throw rocks, knives, and the occasional chicken at anything that gets close.</p>
+      <button id="overlayButton">Start</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+// ============================== SPRITES ==============================
+function makeSprite(rows, palette, outlineHex) {
+  const GH = rows.length, GW = rows[0].length;
+  const outline = [];
+  for (let y=0;y<GH;y++) outline.push(new Array(GW).fill(false));
+  for (let y=0;y<GH;y++){
+    for (let x=0;x<GW;x++){
+      if (rows[y][x] === '.') continue;
+      let isOutline = false;
+      for (const [dx,dy] of [[-1,0],[1,0],[0,-1],[0,1]]){
+        const nx=x+dx, ny=y+dy;
+        if (nx<0||nx>=GW||ny<0||ny>=GH||rows[ny][nx]==='.'){ isOutline = true; break; }
+      }
+      outline[y][x] = isOutline;
+    }
+  }
+  return { rows, palette, outline, GW, GH, outlineHex };
+}
+
+function drawSprite(ctx, sprite, x, y, cell) {
+  const { rows, palette, outline, GW, GH, outlineHex } = sprite;
+  for (let ry=0; ry<GH; ry++){
+    for (let rx=0; rx<GW; rx++){
+      const ch = rows[ry][rx];
+      if (ch === '.') continue;
+      ctx.fillStyle = outline[ry][rx] ? outlineHex : palette[ch];
+      ctx.fillRect(x + rx*cell, y + ry*cell, cell, cell);
+    }
+  }
+}
+
+const OUTLINE_HEX = "#1e140f";
+
+const PLAYER_ROWS = ["....SSS.....","...SSSSS....","...SSSSS....","....SSS.....","...GGGGG....","..GGGGGGG...",".GGRGGGGGG..",".GGGGGGGGG..","..BBBBBBB...","..BB...BB...","..B.....B...",".BB.....BB.."];
+const PLAYER_PALETTE = { S:"#ffd5aa", G:"#5a9646", R:"#965f3c", B:"#64462d" };
+const PLAYER_SPRITE = makeSprite(PLAYER_ROWS, PLAYER_PALETTE, OUTLINE_HEX);
+
+const ROCK_ROWS = ["..RRR..",".RRRRR.","RRRDRRR","RRRRRDR",".RRRRR.","..RRR.."];
+const ROCK_PALETTE = { R:"#787369", D:"#5a554e" };
+const ROCK_SPRITE = makeSprite(ROCK_ROWS, ROCK_PALETTE, OUTLINE_HEX);
+
+const KNIFE_ROWS = [".......HH","......HHH","WWWWWWHH.","WWWWWWWH.","WWWWWWHH.","......HHH",".......HH"];
+const KNIFE_PALETTE = { W:"#d2d7dc", H:"#6e4628" };
+const KNIFE_SPRITE = makeSprite(KNIFE_ROWS, KNIFE_PALETTE, OUTLINE_HEX);
+
+const CHICKEN_ROWS = ["...RR....","..CCCC...",".CWWWWC..","CWWEWWCC.","CWWWWWWC.",".CCCCCC..","..OO.OO.."];
+const CHICKEN_PALETTE = { C:"#fafaf5", W:"#fffffc", E:"#1e1914", O:"#eb9628", R:"#d23232" };
+const CHICKEN_SPRITE = makeSprite(CHICKEN_ROWS, CHICKEN_PALETTE, OUTLINE_HEX);
+
+const SOLDIER_ROWS = ["....HHH.....","...HHHHH....","...HSSSH....","....SSS.....","...TTTTT....","..TTTTTTT...",".LTTTTTTTL..",".LTTTTTTTL..","..DDDDDDD...","..DD...DD...","..D.....D..."];
+const SOLDIER_PALETTE = { H:"#78808a", S:"#ffd5aa", T:"#5a6473", L:"#463c2d", D:"#37322d" };
+const SOLDIER_SPRITE = makeSprite(SOLDIER_ROWS, SOLDIER_PALETTE, OUTLINE_HEX);
+
+const KNIGHT_ROWS = ["....VVV.....","...VVVVV....","...VOOOV....","....VVV.....","...AAAAA....","..AAAAAAA...",".CAAAAAAAC..",".CAAPAAAAC..","..AAAAAAA...","..AA...AA...","..A.....A..."];
+const KNIGHT_PALETTE = { V:"#96a0af", O:"#1e1e23", A:"#aab4c3", C:"#3c5a96", P:"#c83c32" };
+const KNIGHT_SPRITE = makeSprite(KNIGHT_ROWS, KNIGHT_PALETTE, OUTLINE_HEX);
+
+const SAMURAI_ROWS = [".....K......","....KHK.....","...KSSSK....","....SSS.....","...RRRRR....","..RRRRRRR...",".KRRRRRRRK..",".KRRBRRRRK..","..RRRRRRR...","..RR...RR...","..R.....R..."];
+const SAMURAI_PALETTE = { K:"#1e1919", H:"#28231e", S:"#ffd5aa", R:"#aa2323", B:"#19191c" };
+const SAMURAI_SPRITE = makeSprite(SAMURAI_ROWS, SAMURAI_PALETTE, OUTLINE_HEX);
+
+const PRIEST_ROWS = ["....YYY.....","...YHHHY....","...YSSSY....","....SSS.....","...WWWWW....","..WWWWWWW...",".GWWWWWWWG..",".GWWNNWWWG..","..WWWWWWW...","..WW...WW...","..W.....W..."];
+const PRIEST_PALETTE = { Y:"#ffdc78", H:"#faf5eb", S:"#ffd5aa", W:"#faf8f0", G:"#d2af46", N:"#c8beaa" };
+const PRIEST_SPRITE = makeSprite(PRIEST_ROWS, PRIEST_PALETTE, OUTLINE_HEX);
+
+const FOOL_ROWS = ["....HHH.....","...HPWPH....","...HWPWH....","....HHH.....","...PWPWP....","..WPWPWPW...",".KPWPWPWPK..",".KWPWPWPWK..","..PWPWPWP...","MM.......MM.","MM.......MM."];
+const FOOL_PALETTE = { H:"#e6e6e6", P:"#c82832", W:"#f5f5f5", K:"#28282d", M:"#6e4b2d" };
+const FOOL_SPRITE = makeSprite(FOOL_ROWS, FOOL_PALETTE, OUTLINE_HEX);
+
+const ENEMY_SPRITES = { soldier: SOLDIER_SPRITE, knight: KNIGHT_SPRITE, samurai: SAMURAI_SPRITE, priest: PRIEST_SPRITE, fool: FOOL_SPRITE };
+const WEAPON_SPRITES = { rock: ROCK_SPRITE, knife: KNIFE_SPRITE, chicken: CHICKEN_SPRITE };
+
+// ============================== CONSTANTS ==============================
+const CANVAS_W = 900, CANVAS_H = 500;
+const PLAYER_X = CANVAS_W/2, PLAYER_Y = 400;
+const TOP_SPAWN_Y = 58;
+const BASE_BREACH_Y = 385;
+const CHARGE_MAX_MS = 1300;
+
+const WEAPON_STATS = {
+  rock:    { damage: 1, travelMs: 550,  splash: 0,  label: "Rock" },
+  knife:   { damage: 2, travelMs: 650,  splash: 0,  label: "Knife" },
+  chicken: { damage: 4, travelMs: 850,  splash: 55, label: "Chicken" },
+};
+const WEAPON_ORDER = ["rock", "knife", "chicken"];
+
+const OBSTACLES = [
+  { x: 260, y: 300, r: 34, h: 42, type: "rock" },
+  { x: 640, y: 250, r: 30, h: 36, type: "rock" },
+  { x: 480, y: 340, r: 55, h: 0, type: "water" }, // visual + slow zone only, no projectile blocking
+];
+
+const LEVEL_CONFIGS = [
+  { types: ["soldier"], count: 6, spawnMs: 1400, baseHp: 5, ammo: { rock: 10, knife: 3, chicken: 1 } },
+  { types: ["soldier","knight"], count: 8, spawnMs: 1250, baseHp: 5, ammo: { rock: 12, knife: 4, chicken: 1 } },
+  { types: ["soldier","knight","samurai","priest"], count: 10, spawnMs: 1100, baseHp: 5, ammo: { rock: 12, knife: 5, chicken: 2 } },
+  { types: ["soldier","knight","samurai","priest","fool"], count: 12, spawnMs: 950, baseHp: 5, ammo: { rock: 14, knife: 6, chicken: 2 } },
+  { types: ["soldier","knight","samurai","priest","fool"], count: 15, spawnMs: 800, baseHp: 5, ammo: { rock: 16, knife: 7, chicken: 3 } },
+];
+const TOTAL_LEVELS = LEVEL_CONFIGS.length;
+
+const ENEMY_BASE_STATS = {
+  soldier: { hp: 1, speed: 0.55 },
+  knight:  { hp: 3, speed: 0.38 },
+  samurai: { hp: 2, speed: 0.85 },
+  priest:  { hp: 2, speed: 0.48 },
+  fool:    { hp: 4, speed: 1.25 },
+};
+
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ============================== STATE ==============================
+let canvas, ctx;
+let state = "ready"; // ready, playing, levelComplete, gameOver, win
+let levelIndex = 0;
+let baseHp = 5;
+let ammo = { rock: 0, knife: 0, chicken: 0 };
+let activeWeapon = "rock";
+let enemies = [];
+let projectiles = []; // {x0,y0,x1,y1,startTime,travelMs,weapon,dead}
+let deathFx = []; // {x,y,startTime,type}
+let hitFx = []; // {x,y,startTime}
+let crates = []; // {x,y,spawnTime,type,collected}
+let spawnQueue = []; // remaining enemy types to spawn this level
+let lastSpawnTime = -99999;
+let nextCrateTime = 0;
+let elapsedMs = 0;
+let lastFrameTime = 0;
+let score = 0;
+
+let holding = false;
+let chargeStart = 0;
+let aimX = PLAYER_X;
+
+function levelRand() {
+  return mulberry32(4000 + levelIndex * 131);
+}
+
+function buildSpawnQueue(idx) {
+  const cfg = LEVEL_CONFIGS[idx];
+  const rand = mulberry32(4000 + idx * 131);
+  const queue = [];
+  for (let i=0;i<cfg.count;i++){
+    const type = cfg.types[Math.floor(rand()*cfg.types.length)];
+    queue.push(type);
+  }
+  return queue;
+}
+
+function resetLevel(idx) {
+  levelIndex = idx;
+  const cfg = LEVEL_CONFIGS[idx];
+  baseHp = cfg.baseHp;
+  ammo = { rock: cfg.ammo.rock, knife: cfg.ammo.knife, chicken: cfg.ammo.chicken };
+  activeWeapon = "rock";
+  enemies = [];
+  projectiles = [];
+  deathFx = [];
+  hitFx = [];
+  crates = [];
+  spawnQueue = buildSpawnQueue(idx);
+  lastSpawnTime = elapsedMs - cfg.spawnMs; // allow near-immediate first spawn
+  nextCrateTime = elapsedMs + 6000 + Math.random()*3000;
+  holding = false;
+}
+
+function startGame() {
+  score = 0;
+  resetLevel(0);
+  state = "playing";
+}
+
+function loseBaseHp(amount) {
+  baseHp -= amount;
+  if (baseHp <= 0) {
+    baseHp = 0;
+    state = "gameOver";
+  }
+}
+
+function completeLevel() {
+  score += 100 + levelIndex*25;
+  if (levelIndex >= TOTAL_LEVELS - 1) {
+    state = "win";
+  } else {
+    state = "levelComplete";
+  }
+}
+
+function advanceToNextLevel() {
+  resetLevel(levelIndex + 1);
+  state = "playing";
+}
+
+// ============================== INPUT ==============================
+function pointerToCanvasXY(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = CANVAS_W / rect.width;
+  const scaleY = CANVAS_H / rect.height;
+  return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+}
+
+function startCharge(x) {
+  if (state !== "playing") return;
+  if (ammo[activeWeapon] <= 0) return;
+  holding = true;
+  chargeStart = elapsedMs;
+  aimX = x;
+}
+
+function updateAim(x) {
+  if (!holding) return;
+  aimX = Math.max(20, Math.min(CANVAS_W-20, x));
+}
+
+function releaseCharge() {
+  if (!holding) return;
+  holding = false;
+  const power = Math.min(1, (elapsedMs - chargeStart) / CHARGE_MAX_MS);
+  const targetY = PLAYER_Y - power * (PLAYER_Y - TOP_SPAWN_Y - 20);
+  throwWeapon(activeWeapon, aimX, targetY, power);
+}
+
+function throwWeapon(weapon, tx, ty, power) {
+  if (ammo[weapon] <= 0) return;
+  if (power === undefined) power = 1; // default for direct/test calls that skip the charge gesture
+  ammo[weapon]--;
+  const stats = WEAPON_STATS[weapon];
+  // charging longer arcs the throw higher too (not just farther), so a fully-charged throw can
+  // clear taller obstacles that a weak flick couldn't - this is what lets the player choose to
+  // lob over a rock instead of just picking a different landing spot.
+  const peakHeight = 55 + power * 75; // ranges roughly 55 (tap) to 130 (full charge)
+  projectiles.push({
+    x0: PLAYER_X, y0: PLAYER_Y, x1: tx, y1: ty,
+    startTime: elapsedMs, travelMs: stats.travelMs, weapon, dead: false, peakHeight,
+  });
+}
+
+function setActiveWeapon(w) {
+  activeWeapon = w;
+}
+
+function tryCollectCrate(x, y) {
+  for (const c of crates) {
+    if (c.collected) continue;
+    const dx = x - c.x, dy = y - c.y;
+    if (Math.sqrt(dx*dx+dy*dy) < 26) {
+      c.collected = true;
+      ammo[c.type] = (ammo[c.type]||0) + c.amount;
+      return true;
+    }
+  }
+  return false;
+}
+
+// ============================== UPDATE ==============================
+function update(dtMs) {
+  if (state !== "playing") return;
+  const dt = dtMs/16.6667;
+
+  // spawn enemies
+  const cfg = LEVEL_CONFIGS[levelIndex];
+  if (spawnQueue.length > 0 && elapsedMs - lastSpawnTime >= cfg.spawnMs) {
+    const type = spawnQueue.shift();
+    const rand = Math.random();
+    const stats = ENEMY_BASE_STATS[type];
+    enemies.push({
+      type, x: 80 + rand*(CANVAS_W-160), y: TOP_SPAWN_Y,
+      hp: stats.hp, maxHp: stats.hp, speed: stats.speed,
+      alive: true, lastSpecial: elapsedMs, dodgeOffset: 0,
+    });
+    lastSpawnTime = elapsedMs;
+  }
+
+  // move enemies
+  for (const e of enemies) {
+    if (!e.alive) continue;
+    let speed = e.speed;
+    // water zone slows enemies passing through
+    for (const o of OBSTACLES) {
+      if (o.type === "water") {
+        const dx = e.x-o.x, dy = e.y-o.y;
+        if (Math.sqrt(dx*dx+dy*dy) < o.r) speed *= 0.45;
+      }
+    }
+    e.y += speed * dt;
+
+    if (e.type === "samurai" && elapsedMs - e.lastSpecial > 1300 + Math.random()*500) {
+      e.dodgeOffset = (Math.random()-0.5) * 90;
+      e.x = Math.max(40, Math.min(CANVAS_W-40, e.x + e.dodgeOffset));
+      e.lastSpecial = elapsedMs;
+    }
+    if (e.type === "priest" && elapsedMs - e.lastSpecial > 3000) {
+      for (const other of enemies) {
+        if (other === e || !other.alive) continue;
+        const dx = other.x-e.x, dy = other.y-e.y;
+        if (Math.sqrt(dx*dx+dy*dy) < 110 && other.hp < other.maxHp) {
+          other.hp = Math.min(other.maxHp, other.hp + 1);
+          hitFx.push({ x: other.x, y: other.y, startTime: elapsedMs, heal: true });
+        }
+      }
+      e.lastSpecial = elapsedMs;
+    }
+
+    if (e.y >= BASE_BREACH_Y) {
+      e.alive = false;
+      loseBaseHp(1);
+    }
+  }
+  enemies = enemies.filter(e => e.alive);
+
+  // update projectiles
+  for (const p of projectiles) {
+    if (p.dead) continue;
+    const t = Math.min(1, (elapsedMs - p.startTime) / p.travelMs);
+    const curX = p.x0 + (p.x1-p.x0)*t;
+    const curY = p.y0 + (p.y1-p.y0)*t;
+    const height = p.peakHeight * 4*t*(1-t);
+    for (const o of OBSTACLES) {
+      if (o.type !== "rock") continue;
+      const dx = curX-o.x, dy = curY-o.y;
+      if (Math.sqrt(dx*dx+dy*dy) < o.r && height < o.h && t > 0.05 && t < 0.95) {
+        p.dead = true;
+        hitFx.push({ x: curX, y: curY, startTime: elapsedMs, obstacle: true });
+        break;
+      }
+    }
+    if (p.dead) continue;
+
+    if (t >= 1) {
+      p.dead = true;
+      const stats = WEAPON_STATS[p.weapon];
+      const hitRadius = stats.splash > 0 ? stats.splash : 30;
+      let hitAny = false;
+      for (const e of enemies) {
+        if (!e.alive) continue;
+        const dx = e.x-p.x1, dy = e.y-p.y1;
+        if (Math.sqrt(dx*dx+dy*dy) < hitRadius) {
+          e.hp -= stats.damage;
+          hitAny = true;
+          if (e.hp <= 0) {
+            e.alive = false;
+            deathFx.push({ x: e.x, y: e.y, startTime: elapsedMs, type: e.type });
+            score += 10;
+          } else {
+            hitFx.push({ x: e.x, y: e.y, startTime: elapsedMs });
+          }
+          if (stats.splash === 0) break; // non-splash weapons hit only the closest/first match
+        }
+      }
+      enemies = enemies.filter(e => e.alive);
+    }
+  }
+  projectiles = projectiles.filter(p => !p.dead || (elapsedMs - p.startTime) < p.travelMs + 50);
+
+  deathFx = deathFx.filter(f => elapsedMs - f.startTime < 700);
+  hitFx = hitFx.filter(f => elapsedMs - f.startTime < 300);
+
+  // ammo crates
+  if (elapsedMs >= nextCrateTime && crates.filter(c=>!c.collected).length === 0) {
+    const types = ["rock","knife"];
+    const type = types[Math.floor(Math.random()*types.length)];
+    crates.push({
+      x: 100 + Math.random()*(CANVAS_W-200), y: 150 + Math.random()*150,
+      type, amount: type === "rock" ? 3 : 1,
+      spawnTime: elapsedMs, collected: false,
+    });
+    nextCrateTime = elapsedMs + 9000 + Math.random()*4000;
+  }
+  crates = crates.filter(c => !c.collected && elapsedMs - c.spawnTime < 6000);
+
+  // level completion: all enemies spawned, none alive, no projectiles mid-flight
+  if (spawnQueue.length === 0 && enemies.length === 0 && projectiles.filter(p=>!p.dead).length === 0 && state === "playing") {
+    completeLevel();
+  }
+}
+
+// ============================== DRAW ==============================
+function drawField() {
+  const grad = ctx.createLinearGradient(0,0,0,CANVAS_H);
+  grad.addColorStop(0, "#3d6b30");
+  grad.addColorStop(1, "#5a8a44");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+
+  // dirt path texture stripes
+  ctx.fillStyle = "rgba(80,60,30,0.15)";
+  for (let i=0;i<8;i++){
+    ctx.fillRect(0, i*70, CANVAS_W, 6);
+  }
+
+  // obstacles
+  for (const o of OBSTACLES) {
+    if (o.type === "rock") {
+      ctx.fillStyle = "#8a8378";
+      ctx.beginPath(); ctx.ellipse(o.x, o.y, o.r, o.r*0.75, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = "#6b6459";
+      ctx.beginPath(); ctx.ellipse(o.x, o.y+6, o.r*0.7, o.r*0.4, 0, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = "#3a352c"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.ellipse(o.x, o.y, o.r, o.r*0.75, 0, 0, Math.PI*2); ctx.stroke();
+    } else if (o.type === "water") {
+      ctx.fillStyle = "rgba(70,130,180,0.55)";
+      ctx.beginPath(); ctx.ellipse(o.x, o.y, o.r, o.r*0.6, 0, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = "rgba(40,90,140,0.6)"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.ellipse(o.x, o.y, o.r, o.r*0.6, 0, 0, Math.PI*2); ctx.stroke();
+    }
+  }
+
+  // base line indicator
+  ctx.strokeStyle = "rgba(60,40,20,0.4)";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([10,8]);
+  ctx.beginPath(); ctx.moveTo(0, BASE_BREACH_Y); ctx.lineTo(CANVAS_W, BASE_BREACH_Y); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawEnemy(e) {
+  const sprite = ENEMY_SPRITES[e.type];
+  const scale = 3.2;
+  drawSprite(ctx, sprite, e.x - sprite.GW*scale/2, e.y - sprite.GH*scale/2, scale);
+  // HP bar for multi-hp enemies
+  if (e.maxHp > 1) {
+    const w = 30;
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(e.x-w/2, e.y - sprite.GH*scale/2 - 8, w, 5);
+    ctx.fillStyle = "#5ec95e";
+    ctx.fillRect(e.x-w/2, e.y - sprite.GH*scale/2 - 8, w*(e.hp/e.maxHp), 5);
+  }
+}
+
+function draw() {
+  drawField();
+
+  if (state === "playing" || state === "levelComplete") {
+    // crates
+    for (const c of crates) {
+      if (c.collected) continue;
+      const bob = Math.sin(elapsedMs/200)*3;
+      ctx.fillStyle = "#a9762f";
+      ctx.fillRect(c.x-14, c.y-12+bob, 28, 24);
+      ctx.strokeStyle = "#5c3d18"; ctx.lineWidth = 2;
+      ctx.strokeRect(c.x-14, c.y-12+bob, 28, 24);
+      ctx.fillStyle = "#5c3d18";
+      ctx.fillRect(c.x-14, c.y-2+bob, 28, 4);
+    }
+
+    // enemies
+    for (const e of enemies) drawEnemy(e);
+
+    // death effects (comedic spin + scatter)
+    for (const f of deathFx) {
+      const t = (elapsedMs - f.startTime)/700;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1-t);
+      ctx.translate(f.x, f.y - t*40);
+      ctx.rotate(t*14);
+      ctx.scale(1-t*0.5, 1-t*0.5);
+      const sprite = ENEMY_SPRITES[f.type];
+      drawSprite(ctx, sprite, -sprite.GW*3.2/2, -sprite.GH*3.2/2, 3.2);
+      ctx.restore();
+      // little stars/poof around
+      ctx.globalAlpha = Math.max(0, 1-t);
+      ctx.fillStyle = "#ffd166";
+      for (let i=0;i<4;i++){
+        const ang = t*6 + i*(Math.PI/2);
+        ctx.beginPath();
+        ctx.arc(f.x+Math.cos(ang)*24, f.y-t*40+Math.sin(ang)*14, 3, 0, Math.PI*2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // hit sparks
+    for (const f of hitFx) {
+      const t = (elapsedMs-f.startTime)/300;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0,1-t);
+      ctx.fillStyle = f.heal ? "#8be08b" : "#fff3d6";
+      ctx.beginPath(); ctx.arc(f.x, f.y-t*10, 6-t*4, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+
+    // projectiles (with fake-height arc rendering: shadow at true landing path, sprite offset up)
+    for (const p of projectiles) {
+      if (p.dead) continue;
+      const t = Math.min(1, (elapsedMs - p.startTime) / p.travelMs);
+      const curX = p.x0 + (p.x1-p.x0)*t;
+      const curY = p.y0 + (p.y1-p.y0)*t;
+      const height = p.peakHeight * 4*t*(1-t);
+      ctx.fillStyle = "rgba(0,0,0,0.25)";
+      ctx.beginPath(); ctx.ellipse(curX, curY, 10, 5, 0, 0, Math.PI*2); ctx.fill();
+      const sprite = WEAPON_SPRITES[p.weapon];
+      const scale = 2.6;
+      drawSprite(ctx, sprite, curX-sprite.GW*scale/2, curY-height-sprite.GH*scale/2, scale);
+    }
+
+    // player
+    drawSprite(ctx, PLAYER_SPRITE, PLAYER_X-PLAYER_SPRITE.GW*3.4/2, PLAYER_Y-PLAYER_SPRITE.GH*3.4/2, 3.4);
+
+    // aiming crosshair + trajectory preview while charging
+    if (holding) {
+      const power = Math.min(1, (elapsedMs-chargeStart)/CHARGE_MAX_MS);
+      const targetY = PLAYER_Y - power*(PLAYER_Y-TOP_SPAWN_Y-20);
+      const previewPeak = 55 + power*75;
+      ctx.strokeStyle = "rgba(255,209,102,0.8)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6,5]);
+      ctx.beginPath();
+      const steps = 20;
+      for (let i=0;i<=steps;i++){
+        const tt = i/steps;
+        const x = PLAYER_X + (aimX-PLAYER_X)*tt;
+        const y = PLAYER_Y + (targetY-PLAYER_Y)*tt - previewPeak*4*tt*(1-tt);
+        if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = "#ffd166"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(aimX, targetY, 10, 0, Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(aimX-14,targetY); ctx.lineTo(aimX+14,targetY); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(aimX,targetY-14); ctx.lineTo(aimX,targetY+14); ctx.stroke();
+    }
+  }
+}
+
+// ============================== HUD ==============================
+function updateHUD() {
+  const levelLabel = document.getElementById("levelLabel");
+  const heartsEl = document.getElementById("hearts");
+  const enemiesLeftLabel = document.getElementById("enemiesLeftLabel");
+  const powerBarOuter = document.getElementById("powerBarOuter");
+  const powerBarInner = document.getElementById("powerBarInner");
+  const weaponBar = document.getElementById("weaponBar");
+
+  if (levelLabel) levelLabel.textContent = `LEVEL ${levelIndex+1} / ${TOTAL_LEVELS}`;
+  if (heartsEl) {
+    heartsEl.innerHTML = "";
+    const cfg = LEVEL_CONFIGS[levelIndex];
+    for (let i=0;i<cfg.baseHp;i++){
+      const span = document.createElement("span");
+      span.textContent = i < baseHp ? "\u2764\ufe0f" : "\ud83e\udd0d";
+      heartsEl.appendChild(span);
+    }
+  }
+  if (enemiesLeftLabel) {
+    const remaining = spawnQueue.length + enemies.length;
+    enemiesLeftLabel.textContent = `Enemies: ${remaining}`;
+  }
+  if (powerBarOuter) {
+    if (holding) {
+      powerBarOuter.style.display = "block";
+      const power = Math.min(1, (elapsedMs-chargeStart)/CHARGE_MAX_MS);
+      powerBarInner.style.width = (power*100) + "%";
+    } else {
+      powerBarOuter.style.display = "none";
+    }
+  }
+  if (weaponBar) {
+    weaponBar.innerHTML = "";
+    for (const w of WEAPON_ORDER) {
+      const slot = document.createElement("div");
+      slot.className = "weapon-slot" + (w===activeWeapon ? " active" : "") + (ammo[w]<=0 ? " empty" : "");
+      const sprite = WEAPON_SPRITES[w];
+      const svgRects = [];
+      for (let y=0;y<sprite.GH;y++){
+        for (let x=0;x<sprite.GW;x++){
+          const ch = sprite.rows[y][x];
+          if (ch==='.') continue;
+          const color = sprite.outline[y][x] ? sprite.outlineHex : sprite.palette[ch];
+          svgRects.push(`<rect x="${x*10}" y="${y*10}" width="10" height="10" fill="${color}"/>`);
+        }
+      }
+      slot.innerHTML = `<svg viewBox="0 0 ${sprite.GW*10} ${sprite.GH*10}">${svgRects.join('')}</svg><span class="weapon-count">${ammo[w]}</span>`;
+      slot.addEventListener("click", () => setActiveWeapon(w));
+      weaponBar.appendChild(slot);
+    }
+  }
+}
+
+function showOverlay(title, text, buttonText) {
+  const overlay = document.getElementById("overlay");
+  document.getElementById("overlayTitle").textContent = title;
+  document.getElementById("overlayText").innerHTML = text;
+  document.getElementById("overlayButton").textContent = buttonText;
+  overlay.classList.remove("hidden");
+}
+function hideOverlay() { document.getElementById("overlay").classList.add("hidden"); }
+
+let prevState = null;
+function syncOverlay() {
+  if (state === prevState) return;
+  prevState = state;
+  if (state === "ready") {
+    showOverlay("Village Defense", "Defend the farm! Throw rocks, knives, and the occasional chicken at anything that gets close.", "Start");
+  } else if (state === "playing") {
+    hideOverlay();
+  } else if (state === "levelComplete") {
+    showOverlay(`Level ${levelIndex+1} Complete!`, "The farm survives... for now.", levelIndex+1 >= TOTAL_LEVELS ? "Finish" : "Next Level");
+  } else if (state === "gameOver") {
+    showOverlay("The Farm Has Fallen!", "Score: " + score, "Try Again");
+  } else if (state === "win") {
+    showOverlay("Victory!", "All 5 waves survived. The farm is safe.<br>Final Score: " + score, "Play Again");
+  }
+}
+
+// ============================== MAIN LOOP ==============================
+function frame(ts) {
+  if (!lastFrameTime) lastFrameTime = ts;
+  const dtMs = Math.min(50, ts - lastFrameTime);
+  lastFrameTime = ts;
+  elapsedMs += dtMs;
+
+  update(dtMs);
+  draw();
+  updateHUD();
+  syncOverlay();
+
+  requestAnimationFrame(frame);
+}
+
+// ============================== INIT / EVENTS ==============================
+function init() {
+  canvas = document.getElementById("game");
+  ctx = canvas.getContext("2d");
+
+  canvas.addEventListener("mousedown", (e) => {
+    const {x,y} = pointerToCanvasXY(e.clientX, e.clientY);
+    if (state === "playing") {
+      if (!tryCollectCrate(x,y)) startCharge(x);
+    } else if (state === "ready") { startGame(); }
+    else if (state === "levelComplete") { advanceToNextLevel(); }
+  });
+  window.addEventListener("mousemove", (e) => {
+    const {x} = pointerToCanvasXY(e.clientX, e.clientY);
+    updateAim(x);
+  });
+  window.addEventListener("mouseup", releaseCharge);
+
+  canvas.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    const t = e.touches[0];
+    const {x,y} = pointerToCanvasXY(t.clientX, t.clientY);
+    if (state === "playing") {
+      if (!tryCollectCrate(x,y)) startCharge(x);
+    } else if (state === "ready") { startGame(); }
+    else if (state === "levelComplete") { advanceToNextLevel(); }
+  }, {passive:false});
+  canvas.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    const t = e.touches[0];
+    const {x} = pointerToCanvasXY(t.clientX, t.clientY);
+    updateAim(x);
+  }, {passive:false});
+  canvas.addEventListener("touchend", (e) => { e.preventDefault(); releaseCharge(); }, {passive:false});
+
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "Space") { e.preventDefault(); startCharge(aimX); }
+    if (e.key === "1") setActiveWeapon("rock");
+    if (e.key === "2") setActiveWeapon("knife");
+    if (e.key === "3") setActiveWeapon("chicken");
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.code === "Space") releaseCharge();
+  });
+
+  document.getElementById("overlayButton").addEventListener("click", () => {
+    if (state === "ready") startGame();
+    else if (state === "levelComplete") advanceToNextLevel();
+    else if (state === "gameOver" || state === "win") startGame();
+  });
+
+  requestAnimationFrame(frame);
+}
+
+if (typeof window !== "undefined" && typeof document !== "undefined") {
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+}
+
+window.__DEFENSE_TEST__ = {
+  getState: () => state,
+  setState: (s) => { state = s; },
+  startGame, resetLevel, advanceToNextLevel, update,
+  throwWeapon, setActiveWeapon, tryCollectCrate,
+  getEnemies: () => enemies,
+  getProjectiles: () => projectiles,
+  getAmmo: () => ammo,
+  getBaseHp: () => baseHp,
+  getLevelIndex: () => levelIndex,
+  getScore: () => score,
+  getCrates: () => crates,
+  getSpawnQueueLength: () => spawnQueue.length,
+  clearSpawnQueue: () => { spawnQueue = []; },
+  setElapsed: (t) => { elapsedMs = t; },
+  getElapsed: () => elapsedMs,
+  LEVEL_CONFIGS,
+  OBSTACLES,
+  startCharge, updateAim, releaseCharge,
+  getHolding: () => holding,
+  getChargeStart: () => chargeStart,
+};
+
+})();
+</script>
+</body>
+</html>
