@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Class Dismissed!</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; padding:0; height:100%; background:#1a1408; font-family:'Trebuchet MS','Segoe UI',Arial,sans-serif; overflow:hidden; touch-action:none; user-select:none; }
+  #wrap { display:flex; align-items:center; justify-content:center; height:100%; width:100%; }
+  #stage { position:relative; width:min(100%, 900px, calc((100vh - 16px) * 1.8)); aspect-ratio:900/500; }
+  #game { width:100%; height:100%; display:block; background:#ffe29a; border:3px solid #2a1f10; image-rendering:pixelated; cursor:crosshair; }
+  #weaponBar { position:absolute; bottom:8px; left:10px; display:none; gap:8px; pointer-events:auto; }
+  #stage[data-state="playing"] #weaponBar { display:flex; }
+  .weapon-slot { width:54px; height:54px; background:rgba(20,12,6,0.85); border:3px solid #1e1410; border-radius:6px; display:flex; align-items:center; justify-content:center; cursor:pointer; position:relative; }
+  .weapon-slot.active { border-color:#ffd166; box-shadow:0 0 0 2px rgba(255,209,102,0.55), 0 0 12px rgba(255,209,102,0.5); }
+  .weapon-slot.empty { opacity:0.35; }
+  .weapon-slot canvas { width:36px; height:36px; image-rendering:pixelated; background:transparent; border:none; }
+  .weapon-count { position:absolute; bottom:1px; right:3px; color:#fff3d6; font-size:11px; font-weight:bold; text-shadow:1px 1px 1px #000; }
+  .weapon-key { position:absolute; top:1px; left:3px; color:#c9a66b; font-size:9px; font-weight:bold; }
+  #overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(10,8,4,0.88); color:#fff3d6; text-align:center; padding:16px; }
+  #overlay.hidden { display:none; }
+  #overlay.info { background:rgba(14,9,5,0.97); }
+  #overlay.info #panel { width:94%; max-width:840px; }
+  #overlay.menu { background:none; align-items:flex-end; justify-content:center; padding:0 0 14px 0; pointer-events:none; }
+  #overlay.menu #panel { background:none; border:none; padding:0; }
+  #overlay.menu #overlayTitle, #overlay.menu #overlayText { display:none; }
+  #overlay.result { background:none; align-items:flex-end; justify-content:flex-end; padding:0 12px 10px 0; pointer-events:none; }
+  #overlay.result #panel { background:rgba(20,12,6,0.92); border:3px solid #1e1410; border-radius:8px; padding:6px 12px 8px; max-width:330px; }
+  #overlay.result #panel button { margin:6px 4px 0; padding:8px 10px; font-size:10px; }
+  #overlay.result #overlayTitle { font-size:clamp(11px,1.8vw,15px); margin:0 0 4px; }
+  #overlay.result #overlayText { font-size:clamp(10px,1.6vw,13px); }
+  #panel { pointer-events:auto; max-width:94%; max-height:96%; overflow:auto; }
+  #overlayTitle { font-family:'Press Start 2P','Trebuchet MS',monospace; font-size:clamp(14px,2.6vw,22px); margin:0 0 10px; color:#ffd166; line-height:1.4; }
+  #overlayText { font-size:clamp(11px,1.8vw,14px); margin:3px auto; max-width:560px; line-height:1.45; }
+  #panel button { margin:10px 5px 0; background:#ffd166; color:#2a1f10; border:3px solid #1e1410; box-shadow:4px 4px 0 rgba(0,0,0,0.45); font-family:'Press Start 2P','Trebuchet MS',monospace; font-weight:800; font-size:clamp(9px,1.5vw,12px); padding:10px 14px; cursor:pointer; }
+  #panel button:active { transform:translate(2px,2px); box-shadow:2px 2px 0 rgba(0,0,0,0.45); }
+  #panel button.alt { background:#4ecdc4; }
+  #highScoreLine { font-size:11px; color:#a8ebe5; margin-top:4px; }
+  .howto { text-align:left; font-size:clamp(9px,1.35vw,12px); line-height:1.38; display:grid; grid-template-columns:1fr 1fr; gap:4px 22px; }
+  .howto h3 { margin:8px 0 3px; color:#ffd166; font-size:clamp(11px,1.7vw,14px); }
+  .howto .row { display:flex; flex-wrap:wrap; gap:6px; margin:4px 0; }
+  .howto .vis { text-align:center; font-size:10px; width:74px; }
+  .howto .vis img { height:56px; image-rendering:pixelated; display:block; margin:0 auto 2px; }
+  .howto .ok { color:#7CFC8A; font-weight:bold; }
+  .howto .no { color:#ff7b7b; font-weight:bold; }
+  #sfxBtn { position:absolute; top:42px; right:8px; background:rgba(20,12,6,0.7); color:#fff3d6; border:2px solid #1e1410; border-radius:4px; font-size:10px; padding:3px 6px; cursor:pointer; z-index:5; }
+  #rotatePrompt { display:none; position:fixed; inset:0; background:#1a1408; color:#fff3d6; z-index:999; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:30px; font-size:18px; }
+  @media screen and (max-aspect-ratio:1/1) and (max-width:700px) { #wrap { display:none; } #rotatePrompt { display:flex; } }
+</style>
+</head>
+<body>
+<div id="rotatePrompt"><div style="font-size:42px;margin-bottom:14px;">&#128241;</div><div><b>Rotate your phone to landscape</b><br>Class Dismissed! plays best sideways.</div></div>
+<div id="wrap">
+  <div id="stage" data-state="ready">
+    <canvas id="game" width="900" height="500"></canvas>
+    <div id="weaponBar"></div>
+    <button id="sfxBtn">SFX: ON</button>
+    <div id="overlay" class="menu">
+      <div id="panel">
+        <h1 id="overlayTitle">Class Dismissed!</h1>
+        <div id="overlayText"></div>
+        <div id="highScoreLine"></div>
+        <div id="modeBtns"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SPRITE_DATA = {"john_idle":{"rows":[".......KKKK.......","......KaaaaK......",".....KaaaaaaK.....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbbddbbbK....",".....KbbbbbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KffffggggffffK..","..KffffggggffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#4a3426","b":"#ffd5aa","c":"#231c16","d":"#965a46","e":"#e6e6e6","f":"#c82828","g":"#f5f5f5","K":"#1e140f"},"GW":18,"GH":17},"john_phone":{"rows":[".......KKKK.......","......KaaaaK......",".....KaaaaaaK.....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbdddKK..","....KbbbeebdfffK..",".....KbbbbbdfffK..","......KbbbbdKKKK..","......KggggK......","...KKKhhhhhhKKK...","..KhhhhiiiihhhhK..","..KhhhhiiiihhhhK..","..KhhhhKKKKhhhhK..","...KKKK....KKKK..."],"palette":{"a":"#4a3426","b":"#ffd5aa","c":"#231c16","d":"#232328","e":"#965a46","f":"#96e6f0","g":"#e6e6e6","h":"#c82828","i":"#f5f5f5","K":"#1e140f"},"GW":18,"GH":17},"john_hit":{"rows":[".......KKKK.......","......KaaaaK......",".....KaaaaaaK.....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbbddbbbK....",".....KbbbbbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#4a3426","b":"#ffd5aa","c":"#231c16","d":"#962823","e":"#e6e6e6","f":"#c82828","K":"#1e140f"},"GW":18,"GH":17},"maggie_idle":{"rows":["......KKKKKK......",".....KaaaaaaK.....","....KaaaaaaaaK....","...KaaaaaaaaaaK...","...KabbbbbbbbaK...","...KabbbbbbbbaK...","...KabccbbccbaK...","...KabbbbbbbbaK...","....KbbbddbbbK....",".....KbbbbbbK.....","......KbbbbK......","..KKKKeeeeeeKKKK..",".KaaaffffffffaaaK.",".KKKKffffffffKKKK.",".....KffffffK.....",".....KffKKffK.....","......KK..KK......"],"palette":{"a":"#785028","b":"#ffd5aa","c":"#231c16","d":"#c8325a","e":"#e6e6e6","f":"#dc5a96","K":"#1e140f"},"GW":18,"GH":17},"maggie_mirror":{"rows":["......KKKKKK......",".....KaaaaaaK.....","....KaaaaaaaaK....","...KaaaaaaaaaaK...","...KabbbbbbbbaK...","...KabbbbbbbbaK...","...KabccbbccbadKKK","...KabbbbbbbbaeeeK","....KbbbffbbbKeeeK",".....KbbbbbbK.KKKK","......KbbbbK......","..KKKKggggggKKKK..",".KaaahhhhhhhhaaaK.",".KKKKhhhhhhhhKKKK.",".....KhhhhhhK.....",".....KhhKKhhK.....","......KK..KK......"],"palette":{"a":"#785028","b":"#ffd5aa","c":"#231c16","d":"#d2aa5a","e":"#c8e6f0","f":"#c8325a","g":"#e6e6e6","h":"#dc5a96","K":"#1e140f"},"GW":18,"GH":17},"maggie_hit":{"rows":["......KKKKKK......",".....KaaaaaaK.....","....KaaaaaaaaK....","...KaaaaaaaaaaK...","...KabbbbbbbbaK...","...KabbbbbbbbaK...","...KabccbbccbaK...","...KabbdbbdbbaK...","....KbbdeedbbK....",".....KbbeebbK.....","......KbbbbK......","..KKKKffffffKKKK..",".KaaaggggggggaaaK.",".KKKKggggggggKKKK.",".....KggggggK.....",".....KggKKggK.....","......KK..KK......"],"palette":{"a":"#785028","b":"#ffd5aa","c":"#231c16","d":"#4b376e","e":"#965a46","f":"#e6e6e6","g":"#dc5a96","K":"#1e140f"},"GW":18,"GH":17},"alice_idle":{"rows":[".......KKKK.KK....","......KaaaaK......",".....KaaaaaaK.....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbbddbbbK....",".....KbbbbbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#372a23","b":"#ffd5aa","c":"#967864","d":"#965a46","e":"#e1e1e1","f":"#788c96","K":"#1e140f"},"GW":18,"GH":17},"alice_sleep":{"rows":[".......KKKK.KK....","......KaaaaK......",".....KaaaaaaK.....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbbddbbbK....",".....KbbbbbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#372a23","b":"#ffd5aa","c":"#5a4637","d":"#965a46","e":"#e1e1e1","f":"#788c96","K":"#1e140f"},"GW":18,"GH":17},"alice_hit":{"rows":[".......KKKK.KK....","......KaaaaK......",".....KaaaaaaK.....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbddddbbK....",".....KbbddbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#372a23","b":"#ffd5aa","c":"#191414","d":"#6e372d","e":"#e1e1e1","f":"#788c96","K":"#1e140f"},"GW":18,"GH":17},"cent_idle":{"rows":[".....KKKKKKKK.....","....KaaaaaaaaK....","....KaaaaaaaaK....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbbddbbbK....",".....KbbbbbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KfffffggfffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#28282d","b":"#c6946e","c":"#1e1612","d":"#6e4137","e":"#e1e1e1","f":"#46505f","g":"#d7b450","K":"#1e140f"},"GW":18,"GH":17},"cent_laptop":{"rows":[".....KKKKKKKK.....","....KaaaaaaaaK....","....KaaaaaaaaK....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbbddbbbK....",".....KeeeeeeK.....",".....KffffffK.....",".....KggggggK.....","...KKhhhhhhhhKK...","..KhhhhhiihhhhhK..","..KhhhhhhhhhhhhK..","..KhhhhKKKKhhhhK..","...KKKK....KKKK..."],"palette":{"a":"#28282d","b":"#c6946e","c":"#1e1612","d":"#6e4137","e":"#82dc8c","f":"#2d2a28","g":"#3c3732","h":"#46505f","i":"#d7b450","K":"#1e140f"},"GW":18,"GH":17},"cent_hit":{"rows":[".....KKKKKKKK.....","....KaaaaaaaaK....","....KaaaaaaaaK....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbcbbbbcbK....","....KbddbbddbK....","....KbbbbbbbbK....","....KbbeeeebbK....",".....KbbbbbbK.....","......KbbbbK......","......KffffK......","...KKKggggggKKK...","..KggggghhgggggK..","..KggggggggggggK..","..KggggKKKKggggK..","...KKKK....KKKK..."],"palette":{"a":"#28282d","b":"#c6946e","c":"#140f0c","d":"#1e1612","e":"#962823","f":"#e1e1e1","g":"#46505f","h":"#d7b450","K":"#1e140f"},"GW":18,"GH":17},"glen_idle":{"rows":[".......KKKK.......","......KaaaaK......",".....KaaaaaaK.....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KcdcbbcdcK....","....KbbbbbbbbK....","....KbbbeebbbK....",".....KbbbbbbK.....","......KbbbbK......","......KffffK......","...KKKghhhhgKKK...","..KggggggggggggK..","..KggggggggggggK..","..KggggKKKKggggK..","...KKKK....KKKK..."],"palette":{"a":"#231c16","b":"#ffdcb9","c":"#322d2a","d":"#1e1916","e":"#965f4b","f":"#f0f0f0","g":"#5a785f","h":"#f5f5f5","K":"#1e140f"},"GW":18,"GH":17},"glen_standing":{"rows":[".......KKKK.......","......KaaaaK......",".....KaaaaaaK.....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KcdcbbcdcK....","....KbbbbbbbbK....","....KbbbeebbbK..KK",".....KbbbbbbK..KK.","......KbbbbK..KK..","......KffffK......","...KKKggggggKKK...","..KggggggggggggK..","..KggggggggggggK..","..KggggKKKKggggK..","...KKKK....KKKK..."],"palette":{"a":"#231c16","b":"#ffdcb9","c":"#322d2a","d":"#1e1916","e":"#965f4b","f":"#f0f0f0","g":"#5a785f","K":"#1e140f"},"GW":18,"GH":17},"glen_hit":{"rows":[".......KKKK.......","......KaaaaK......",".....KaaaaaaK.....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KcdcbbcdcK....","....KbbbbbbbbK....","....KbbeeeebbK....",".....KbbbbbbK.....","......KbbbbK......","......KffffK......","...KKKggggggKKK...","..KggggggggggggK..","..KggggggggggggK..","..KggggKKKKggggK..","...KKKK....KKKK..."],"palette":{"a":"#231c16","b":"#ffdcb9","c":"#322d2a","d":"#191412","e":"#6e372d","f":"#f0f0f0","g":"#5a785f","K":"#1e140f"},"GW":18,"GH":17},"linda_idle":{"rows":["....KKK....KKK....","...KaaaK..KaaaK...","....KaaaKKaaaK....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbbddbbbK....",".....KbbbbbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#963c78","b":"#ffdcbe","c":"#1e1916","d":"#965a46","e":"#ebebeb","f":"#8c5abe","K":"#1e140f"},"GW":18,"GH":17},"linda_headphones":{"rows":["....KKK....KKK....","...KaaaK..KaaaK...","...KbaaaKKaaaabK..","..KccaaaaaaaaaccK.","..KccaddddddaaccK.","..KKcdddddddddKKK.","....KdeeddeedK....","....KddddddddK....","....KdddffdddK....",".....KddddddK.....","......KddddK......","......KggggK......","...KKKhhhhhhKKK...","..KhhhhhhhhhhhhK..","..KhhhhhhhhhhhhK..","..KhhhhKKKKhhhhK..","...KKKK....KKKK..."],"palette":{"a":"#963c78","b":"#3cbebe","c":"#32aaaf","d":"#ffdcbe","e":"#1e1916","f":"#965a46","g":"#ebebeb","h":"#8c5abe","K":"#1e140f"},"GW":18,"GH":17},"linda_hit":{"rows":["....KKK....KKK....","...KaaaK..KaaaK...","....KaaaKKaaaK....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbddddbbK....",".....KbbddbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#963c78","b":"#ffdcbe","c":"#14120f","d":"#6e372d","e":"#ebebeb","f":"#8c5abe","K":"#1e140f"},"GW":18,"GH":17},"tina_idle":{"rows":["......KKKKKK......",".....KaaaaaaK.....","....KaaaaaaabK....","....KaaaaaaaaK....","....KaccccccaK....","....KccccccccK....","....KcddccddcK....","....KccccccccK....","....KccceecccK....",".....KccccccK.....","......KccccK......","......KffffK......","...KKKggggggKKK...","..KggggggggggggK..","..KggggggggggggK..","..KggggKKKKggggK..","...KKKK....KKKK..."],"palette":{"a":"#191614","b":"#dc3c5a","c":"#ffe0c3","d":"#1e1916","e":"#965a46","f":"#ebebeb","g":"#5a8c96","K":"#1e140f"},"GW":18,"GH":17},"tina_voice":{"rows":["......KKKKKK......",".....KaaaaaaK.....","....KaaaaaaabK....","....KaaaaaaaaK....","....KaccccccaK....","....KccccccccK....","....KcddccddcK....","....KccccccceeKK..","....KcccffcceggK..",".....KccccccKKKK..","......KccccK......","......KhhhhK......","...KKKiiiiiiKKK...","..KiiiiiiiiiiiiK..","..KiiiiiiiiiiiiK..","..KiiiiKKKKiiiiK..","...KKKK....KKKK..."],"palette":{"a":"#191614","b":"#dc3c5a","c":"#ffe0c3","d":"#1e1916","e":"#232328","f":"#965a46","g":"#96e6f0","h":"#ebebeb","i":"#5a8c96","K":"#1e140f"},"GW":18,"GH":17},"tina_hit":{"rows":["......KKKKKK......",".....KaaaaaaK.....","....KaaaaaaabK....","....KaaaaaaaaK....","....KaccccccaK....","....KccccccccK....","....KcddccddcK....","....KccccccccK....","....KcceeeeccK....",".....KcceeccK.....","......KccccK......","......KffffK......","...KKKggggggKKK...","..KggggggggggggK..","..KggggggggggggK..","..KggggKKKKggggK..","...KKKK....KKKK..."],"palette":{"a":"#191614","b":"#dc3c5a","c":"#ffe0c3","d":"#14120f","e":"#6e372d","f":"#ebebeb","g":"#5a8c96","K":"#1e140f"},"GW":18,"GH":17},"mike_idle":{"rows":["..................","......KKKKKK......",".....KaaaaaaK.....","....KaaaaaaaaK....","...KaabbbbbbaaK...","...KbbbbbbbbbbK...","...KbbccbbccbbK...","...KbbbbbbbbbbK...","...KbbbbddbbbbK...","....KbbbbbbbbK....",".....KbbbbbbK.....","......KeeeeK......","..KKKKffffffKKKK..",".KffffffffffffffK.",".KffffffffffffffK.",".KKffffKKKKffffKK.","...KKKK....KKKK..."],"palette":{"a":"#3c2d23","b":"#ffd5af","c":"#231c16","d":"#965a46","e":"#ebebeb","f":"#e69632","K":"#1e140f"},"GW":18,"GH":17},"mike_eating":{"rows":["..................","......KKKKKK......",".....KaaaaaaK.....","....KaaaaaaaaK....","...KaabbbbbbaaK...","...KbbbbbbbbbbK...","...KbbccbbccbbK...","...KbbbbbbbbdddKK.","...KbbbbeebbffffK.","....KbbbbbbbgKKKK.",".....KbbbbbbK.....","......KhhhhK......","..KKKKiiiiiiKKKK..",".KiiiiiiiiiiiiiiK.",".KiiiiiiiiiiiiiiK.",".KKiiiiKKKKiiiiKK.","...KKKK....KKKK..."],"palette":{"a":"#3c2d23","b":"#ffd5af","c":"#231c16","d":"#d89e5a","e":"#965a46","f":"#963c32","g":"#aa7841","h":"#ebebeb","i":"#e69632","K":"#1e140f"},"GW":18,"GH":17},"mike_hit":{"rows":["..................","......KKKKKK......",".....KaaaaaaK.....","....KaaaaaaaaK....","...KaabbbbbbaaK...","...KbbbbbbbbbbK...","...KbbccbbccbbK...","...KbbdbbbbdbbK...","...KbbdbeebdbbK...","....KbdbeebdbK....",".....KbbbbbbK.....","......KffffK......","..KKKKggggggKKKK..",".KggggggggggggggK.",".KggggggggggggggK.",".KKggggKKKKggggKK.","...KKKK....KKKK..."],"palette":{"a":"#3c2d23","b":"#ffd5af","c":"#231c16","d":"#6ebeeb","e":"#6e372d","f":"#ebebeb","g":"#e69632","K":"#1e140f"},"GW":18,"GH":17},"g1_idle":{"rows":["..................","..................","......KKKKKK......",".....KaaaaaaK.....",".....KbbbbbbK.....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbbddbbbK....",".....KbbbbbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#be3c32","b":"#ffd5aa","c":"#1e1916","d":"#8c5544","e":"#e8e8e8","f":"#46965a","K":"#1e140f"},"GW":18,"GH":17},"g1_hit":{"rows":["..................","..................","......KKKKKK......",".....KaaaaaaK.....",".....KbbbbbbK.....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbddddbbK....",".....KbbddbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#be3c32","b":"#ffd5aa","c":"#14110f","d":"#6e372d","e":"#e8e8e8","f":"#46965a","K":"#1e140f"},"GW":18,"GH":17},"g2_idle":{"rows":["......KKKKKK......",".....KaaaaaaK.....","....KaaaaaaaaK....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbbddbbbK....",".....KbbbbbbK.....","......KbbbbK......","...KKKeeeeeeKKK...","...KffffffffffK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#1e1919","b":"#e6b48c","c":"#1e1916","d":"#8c5544","e":"#e8e8e8","f":"#3c6ebe","K":"#1e140f"},"GW":18,"GH":17},"g2_hit":{"rows":["......KKKKKK......",".....KaaaaaaK.....","....KaaaaaaaaK....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbddddbbK....",".....KbbddbbK.....","......KbbbbK......","...KKKeeeeeeKKK...","...KffffffffffK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#1e1919","b":"#e6b48c","c":"#14110f","d":"#6e372d","e":"#e8e8e8","f":"#3c6ebe","K":"#1e140f"},"GW":18,"GH":17},"g3_idle":{"rows":["......KKKKKK......","....KKaaaaaaKK....","...KaaaaaaaaaaK...","...KaKaaaaaaKaK...","...KK.KbbbbK.KK...","....KKbbbbbbKK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbbddbbbK....",".....KbbbbbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#d26e28","b":"#ffd5aa","c":"#1e1916","d":"#8c5544","e":"#e8e8e8","f":"#8c5abe","K":"#1e140f"},"GW":18,"GH":17},"g3_hit":{"rows":["......KKKKKK......","....KKaaaaaaKK....","...KaaaaaaaaaaK...","...KaKaaaaaaKaK...","...KK.KbbbbK.KK...","....KKbbbbbbKK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbddddbbK....",".....KbbddbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#d26e28","b":"#ffd5aa","c":"#14110f","d":"#6e372d","e":"#e8e8e8","f":"#8c5abe","K":"#1e140f"},"GW":18,"GH":17},"g4_idle":{"rows":[".......KKKK.......","......KaaaaK......",".....KaaaaaaK.....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbbddbbbK....",".....KbbbbbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#e1c346","b":"#ffe0c3","c":"#1e1916","d":"#8c5544","e":"#e8e8e8","f":"#32a0a0","K":"#1e140f"},"GW":18,"GH":17},"g4_hit":{"rows":[".......KKKK.......","......KaaaaK......",".....KaaaaaaK.....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbddddbbK....",".....KbbddbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#e1c346","b":"#ffe0c3","c":"#14110f","d":"#6e372d","e":"#e8e8e8","f":"#32a0a0","K":"#1e140f"},"GW":18,"GH":17},"g5_idle":{"rows":["..................","..................","....KKKKKKKKKK....","....KKaaaaaaKK....","......KbbbbK......","....KKbbbbbbKK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbbddbbbK....",".....KbbbbbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#c83c3c","b":"#b4825f","c":"#1e1916","d":"#8c5544","e":"#e8e8e8","f":"#dc8228","K":"#1e140f"},"GW":18,"GH":17},"g5_hit":{"rows":["..................","..................","..................","..................","......KKKKKK......","....KKaaaaaaKK....","....KabbaabbaK....","....KaaaaaaaaK....","....KaaccccaaK....",".....KaaccaaK.....","......KaaaaK......","......KddddK......","...KKKeeeeeeKKK...","..KeeeeeeeeeeeeK..","..KeeeeeeeeeeeeK..","..KeeeeKKKKeeeeK..","...KKKK....KKKK..."],"palette":{"a":"#b4825f","b":"#14110f","c":"#6e372d","d":"#e8e8e8","e":"#dc8228","K":"#1e140f"},"GW":18,"GH":17},"g6_idle":{"rows":["......KKKKKK......","....KKaaaaaaKK....","...KaaaaaaaaaaK...","...KaKaaaaaaKaK...","...KK.KbbbbK.KK...","....KKbbbbbbKK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbbddbbbK....",".....KbbbbbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#462d1e","b":"#be875f","c":"#1e1916","d":"#8c5544","e":"#e8e8e8","f":"#dcc832","K":"#1e140f"},"GW":18,"GH":17},"g6_hit":{"rows":["......KKKKKK......","....KKaaaaaaKK....","...KaaaaaaaaaaK...","...KaKaaaaaaKaK...","...KK.KbbbbK.KK...","....KKbbbbbbKK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbddddbbK....",".....KbbddbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#462d1e","b":"#be875f","c":"#14110f","d":"#6e372d","e":"#e8e8e8","f":"#dcc832","K":"#1e140f"},"GW":18,"GH":17},"g7_idle":{"rows":[".......KKKK.......","......KaaaaK......",".....KaaaaaaK.....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KcccbbcccK....","....KbbbbbbbbK....","....KbbbddbbbK....",".....KbbbbbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#231e1c","b":"#ffd5aa","c":"#2d2a28","d":"#8c5544","e":"#e8e8e8","f":"#787878","K":"#1e140f"},"GW":18,"GH":17},"g7_hit":{"rows":[".......KKKK.......","......KaaaaK......",".....KaaaaaaK.....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbddddbbK....",".....KbbddbbK.....","......KbbbbK......","......KeeeeK......","...KKKffffffKKK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#231e1c","b":"#ffd5aa","c":"#14110f","d":"#6e372d","e":"#e8e8e8","f":"#787878","K":"#1e140f"},"GW":18,"GH":17},"g8_idle":{"rows":["......KKKKKK......",".....KaaaaaaK.....","....KaaaaaaaaK....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbbddbbbK....",".....KbbbbbbK.....","......KbbbbK......","...KKKeeeeeeKKK...","...KffffffffffK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#8c282d","b":"#ffe0c3","c":"#1e1916","d":"#8c5544","e":"#e8e8e8","f":"#dc6e96","K":"#1e140f"},"GW":18,"GH":17},"g8_hit":{"rows":["......KKKKKK......",".....KaaaaaaK.....","....KaaaaaaaaK....","....KaaaaaaaaK....","....KabbbbbbaK....","....KbbbbbbbbK....","....KbccbbccbK....","....KbbbbbbbbK....","....KbbddddbbK....",".....KbbddbbK.....","......KbbbbK......","...KKKeeeeeeKKK...","...KffffffffffK...","..KffffffffffffK..","..KffffffffffffK..","..KffffKKKKffffK..","...KKKK....KKKK..."],"palette":{"a":"#8c282d","b":"#ffe0c3","c":"#14110f","d":"#6e372d","e":"#e8e8e8","f":"#dc6e96","K":"#1e140f"},"GW":18,"GH":17},"smith_back":{"rows":["........KKKK........",".......KaaaaK.KK....",".......KaaaaaKbbK...","......KaaaaaaaKK....","......KcaaaacK....K.",".....KKcaaaacKK..KK.",".......KaaaaK...KaK.","......KddddddK.KKK..","....KKeeeeeeeeKK....","...KeeeeeeeeeeeeK...","...KeeeeeeeeeeeeK...","...KeeeeeeeeeeeeK...","...KeeeeeeeeeeeeK...","...KeeeeeeeeeeeeK...","...KeeeeeeeeeeeeK...","....KffffffffffK....","....KffffffffffK....","....KfffKKKKfffK....","....KffK....KffK....","....KffK....KffK....","....KggK....KggK....","....KKKK....KKKK...."],"palette":{"a":"#ebbe96","b":"#96dceb","c":"#46413c","d":"#fafafa","e":"#5a6e96","f":"#37373c","g":"#1e1c1a","K":"#1e140f"},"GW":20,"GH":22},"smith_throw":{"rows":[".........KKKK.........",".....K..KaaaaK........","....KKKKbaaaabK.......","......KbaaaaaabK......","......KaaaaaaaaK......","......KccaaaaccK......","......KaaaaaaaaK......","......KdedaadedK......","......KaaaaaaaaK......","......KaaaaaaaaK......",".......KffffffK.......","........KaaaaK........","........KggggK......KK",".........KaaK......KaK",".........KaaK.....KKK.",".......KKhhhhKK.......","....KKKiiiiiiiiKKK....","...KiiiiiijjiiiiiiK...","...KiiiiiijjiiiiiiK...","...KiiiiiijjiiiiiiK...","...KiiiiiiiiiiiiiiK...","....KkkkkkkkkkkkkK....","....KKKKKKKKKKKKKK....","......................","......................","......................"],"palette":{"a":"#ebbe96","b":"#46413c","c":"#28201c","d":"#191614","e":"#ffffff","f":"#3c322a","g":"#962823","h":"#fafafa","i":"#5a6e96","j":"#aa2828","k":"#37373c","K":"#1e140f"},"GW":22,"GH":26},"smith_win":{"rows":[".........KKKK.........","........KaaaaK........",".......KbaaaabK.......","......KbaaaaaabK......","......KaaaaaaaaK......","......KccaaaaccK......","......KaadaaaaaK......","......KefeaaefeK......","......KaaaaaaaaK......","......KaaaaaaaaK......",".......KaaaaaaK.......",".......KggggggK.......","........KhhhhK........",".........KaaK.........",".........KaaK.........",".......KKiiiiKK.......","....KKKjjjjjjjjKKK....","..KKajjjjjkkjjjjjaKK..","...KaajjjjkkjjjjaaK...","...KjjjjjjkkjjjjjjK...","...KjjjjjjjjjjjjjjK...","....KllllllllllllK....","....KKKKKKKKKKKKKK....","......................","......................","......................"],"palette":{"a":"#ebbe96","b":"#46413c","c":"#28201c","d":"#ffffff","e":"#191614","f":"#ffffff","g":"#963228","h":"#fffffa","i":"#fafafa","j":"#5a6e96","k":"#aa2828","l":"#37373c","K":"#1e140f"},"GW":22,"GH":26},"smith_lose":{"rows":[".........KKKK.........","........KaaaaK........",".......KbaaaabK.......","......KbaaaaaabK......","......KaaaaaaaaK......","......KccaaaaccK......","......KaaaaaaaaK......","......KdedaadedK......","......KfaaaaaafK......","......KfaaaaaafK......","......KKggggggKK......","......K.KaaaaK.K......",".......KKhhhhKK.......",".........KaaK.........",".........KaaK.........",".......KKiiiiKK.......",".....KKjjjjjjjjKK.....","....KjjjjjkkjjjjjK....","....KjjjjjkkjjjjjK....","....KjjjjjkkjjjjjK....","....KjjjjjjjjjjjjK....","....KllllllllllllK....","....KKKKKKKKKKKKKK....","......................","......................","......................"],"palette":{"a":"#ebbe96","b":"#46413c","c":"#28201c","d":"#191614","e":"#ffffff","f":"#6ebeeb","g":"#3c322a","h":"#5a1e19","i":"#fafafa","j":"#5a6e96","k":"#aa2828","l":"#37373c","K":"#1e140f"},"GW":22,"GH":26},"desk":{"rows":[".KKKKKKKKKKKKKKKKKK.",".KaaaaaaaaaaaaaaaaK.","..KbbbbbbbbbbbbbbK..","..KbbbbKKKKKKbbbbK..","...KbbK......KbbK...","...KbbK......KbbK...","...KKKK......KKKK...","...................."],"palette":{"a":"#aa8250","b":"#825f37","K":"#1e140f"},"GW":20,"GH":8},"principal":{"rows":["......KKKK......",".....KaaaaK.....",".....KbbbbK.....",".....KcbbcK.....",".....KdbbdK.....",".....KbbbbK.....","......KeeK......","......KbbK......","...KKKffffKKK...","..KffffggffffK..","..KffffggffffK..","..KffffffffffK..","..KKKKKKKKKKKK..","................","................","................","................","................","................","................","................","................"],"palette":{"a":"#96969b","b":"#ebbe96","c":"#3c3734","d":"#191412","e":"#5a2823","f":"#23232a","g":"#aa1e1e","K":"#1e140f"},"GW":16,"GH":22},"pizza_guy":{"rows":["......KKKK......",".....KaaaaK.....","....KbbbbbbK....",".....KccccK.....",".....KdccdK.....",".....KccccK.....","......KeeK......","......KccK......","...KKKffffKKK...","..KffffffffffK..","..KffffffffffK..",".KghhihhhihhhgK.",".KKKKKKKKKKKKKK.","................","................","................","................","................","................","................","................","................"],"palette":{"a":"#d21e1e","b":"#aa1414","c":"#ebbe96","d":"#191412","e":"#963228","f":"#d21e1e","g":"#c8965a","h":"#ebbe5a","i":"#be2823","K":"#1e140f"},"GW":16,"GH":22},"wife":{"rows":["......KKKK......",".....KaaaaK.....","....KaaaaaaK....",".....KbbbbK.....",".....KcbbcK.....",".....KKbbKK.....",".......KK.......","......KbbK......","...KKKddddKKK...","..KddddddddddK..","..KddddddddddK..","..KddeeeeeeddK..","..KKKKKKKKKKKK..","................","................","................","................","................","................","................","................","................"],"palette":{"a":"#6e462d","b":"#f0c3a0","c":"#1e1916","d":"#aa6ea0","e":"#5a8caa","K":"#1e140f"},"GW":16,"GH":22},"nurse":{"rows":["......KKKK......",".....KaaaaK.....",".....KbcbbK.....",".....KddddK.....",".....KeddeK.....",".....KKddKK.....",".......KK.......","......KddK......","...KKKffffKKK...","..KffffffffffK..","..KffffccffffK..","..KffffffffffK..","..KKKKKKKKKKKK..","................","................","................","................","................","................","................","................","................"],"palette":{"a":"#5a4132","b":"#fafafa","c":"#d21e1e","d":"#ebbe96","e":"#1e1916","f":"#78aadc","K":"#1e140f"},"GW":16,"GH":22},"janitor":{"rows":["......KKKK...KKK..",".....KaaaaK..KbK..",".....KccccK...K...",".....KdccdK...K...",".....KKccKK...K...",".......KK.....K...","......KccK....K...","...KKKeeeeKKK.....","..KeeeeeeeeeeK....","..KeeeeeeeeeeK....","..KeeeeeeeeeeK....","..KKKKKKKKKKKK....","..................","..................","..................","..................","..................","..................","..................","..................","..................",".................."],"palette":{"a":"#3c3732","b":"#ebe6d2","c":"#e1b48c","d":"#1c1814","e":"#5a646e","K":"#1e140f"},"GW":18,"GH":22},"rude_student":{"rows":[".....KKKKKK.....","....KaaaaaaK....",".....KbbbbK.....",".....KcbbcK.....",".....KKbbKK.....",".......KK.......","......KbbK......","...KKKddddKKK...","..KdeddddddedK..","..KfdddddddddK..","..KfdddddddddK..","..KKKKKKKKKKKK..","................","................","................","................","................","................","................","................","................","................"],"palette":{"a":"#28235a","b":"#dcaf8c","c":"#191412","d":"#5ad23c","e":"#f0821e","f":"#281e14","K":"#1e140f"},"GW":16,"GH":22},"ninja":{"rows":[".....KKKK.....","....KaaaaK....","....KbaabK....","....KaaaaK....","....KaaaaK....","...KaaaaaaK...","..KaaaaaaaaK..","..KaaaaaaaaK..","..KccccccccK..","..KaaaaaaaaK..","..KaaaaaaaaK..","..KKKKKKKKKK..","..............","..............","..............","..............","..............","..............","..............","..............","..............",".............."],"palette":{"a":"#231c46","b":"#ffffff","c":"#c81e28","K":"#1e140f"},"GW":14,"GH":22},"mascot":{"rows":["....KKKKKKKKKK....","...KaaaaaaaaaaK...","..KaaaaaaaaaaaaK..","..KaabaaaaaabaaK..","..KaaaaaaaaaaaaK..","...KaaacccaaaaK...","....KaaaaaaaaK....","..KKddddddddddKK..",".KddddddddddddddK.",".KddddddddddddddK.",".KddddddddddddddK.",".KKKKKKKKKKKKKKKK.","..................","..................","..................","..................","..................","..................","..................","..................","..................",".................."],"palette":{"a":"#f5af2d","b":"#191412","c":"#963228","d":"#3764aa","K":"#1e140f"},"GW":18,"GH":22},"icon_phone":{"rows":["...K...","..KaK..",".KaaaK.",".KbbbK.",".KbbbK.",".KbbbK.",".KbbbK.",".KacaK.","..KKK..","......."],"palette":{"a":"#232328","b":"#96e6f0","c":"#5a5a62","K":"#1e140f"},"GW":7,"GH":10},"icon_lipstick":{"rows":["..KK..",".KaaK.",".KbbK.",".KccK.",".KccK.",".KccK.",".KKKK.","......","......","......"],"palette":{"a":"#e63c6e","b":"#c8aa5a","c":"#28282d","K":"#1e140f"},"GW":6,"GH":10},"icon_laptop":{"rows":["..KKKKKK..","..KaaaaK..","..KaaaaK..",".KbbbbbbK.","KKKKKKKKKK","..........","..........",".........."],"palette":{"a":"#78d296","b":"#37373c","K":"#1e140f"},"GW":10,"GH":8},"icon_zzz":{"rows":["aaaaaaa..","aaaaaaa..",".....aa..","...aa....",".aa......","aaaaaaa..","aaaaaaa..","........."],"palette":{"a":"#3c6ec8","K":"#1e140f"},"GW":9,"GH":8},"icon_music":{"rows":["....KKK","....KaK","....KK.","....KK.","...KbK.","..KccK.","..KKKK.",".......","......."],"palette":{"a":"#5a96dc","b":"#f5f5f5","c":"#f5f5f5","K":"#1e140f"},"GW":7,"GH":9},"icon_mic":{"rows":["..KKK..","..KaK..","..KaK..","..KaK..",".KKbKK.","...K...",".KKKKK.",".......",".......","......."],"palette":{"a":"#3c3c41","b":"#28282d","K":"#1e140f"},"GW":7,"GH":10},"icon_burger":{"rows":[".KKKKKKK.","KaaaaaaaK","KbbbbbbbK","KcccccccK","KdddddddK",".KeeeeeK.",".KKKKKKK.","........."],"palette":{"a":"#d89e5a","b":"#6eb450","c":"#963c32","d":"#ebbe3c","e":"#aa7841","K":"#1e140f"},"GW":9,"GH":8},"icon_chat":{"rows":["KKKKKK....","KaaaabKKKK",".KKKKKbbbK","......KKKK","..........","..........","..........",".........."],"palette":{"a":"#f5f5f5","b":"#ebebeb","K":"#1e140f"},"GW":10,"GH":8},"icon_paperball":{"rows":["..KKK..",".KaaaK.",".KbbbK.",".KaaaK.","..KKK..",".......","......."],"palette":{"a":"#f5f0e1","b":"#dcd7c8","K":"#1e140f"},"GW":7,"GH":7},"icon_hand":{"rows":["..K.K..",".KaKaK.",".KaaaK.",".KaaaK.","..KaK..","..KbK..","..KKK..",".......","......."],"palette":{"a":"#ffd5aa","b":"#5a785f","K":"#1e140f"},"GW":7,"GH":9},"icon_question":{"rows":[".KKKKK.","KKK.KaK","....KaK","...KaK.","..KKK..",".......","..KKK..",".......",".......","......."],"palette":{"a":"#5a96dc","K":"#1e140f"},"GW":7,"GH":10},"icon_fire":{"rows":["....K....","...KaK...","...KbK...","..KaaaK..","..KbbbK..","..KaaaK..","...KbK...","...KKK...","..KK.KK..","........."],"palette":{"a":"#eb5a1e","b":"#ffbe3c","K":"#1e140f"},"GW":9,"GH":10},"icon_mascara":{"rows":["...K...","..KaK..",".KaaaK.",".KaaaK.",".KaaaK.","..KbK..","..KbK..","...K...",".......","......."],"palette":{"a":"#4b376e","b":"#8c6eaa","K":"#1e140f"},"GW":7,"GH":10},"icon_exclaim":{"rows":[".KKK.",".KaK.",".KaK.",".KKK.",".....",".....",".KKK.",".....",".....","....."],"palette":{"a":"#dc3c32","K":"#1e140f"},"GW":5,"GH":10},"icon_teardrop":{"rows":["...K...","..KaK..",".KaaaK.",".KaaaK.",".KaaaK.","..KaK..","...K...",".......","......."],"palette":{"a":"#5ab4e6","K":"#1e140f"},"GW":7,"GH":9},"icon_redcard":{"rows":["...K...","...K...","...K...",".KKaKK.",".KaaaK.",".KaaaK.",".KaaaK.",".KaaaK.",".KKKKK.","......."],"palette":{"a":"#d21e1e","K":"#1e140f"},"GW":7,"GH":10},"icon_dizzy":{"rows":["..K.......K..",".KaK.....KaK.","..K...K...K..",".....KaK.....","......K......",".............","............."],"palette":{"a":"#ffd166","K":"#1e140f"},"GW":13,"GH":7},"icon_chalk":{"rows":[".KKKKKKKK.",".KaaaaaaK.",".KaaaaaaK.","KKKKKKKKKK","..........",".........."],"palette":{"a":"#faf8f0","K":"#1e140f"},"GW":10,"GH":6},"icon_eraser":{"rows":[".KKKKKKKK.","KaaaaaaaaK","KbbbbbbbbK","KbbbbbbbbK","KaaaaaaaaK",".KKKKKKKK.",".........."],"palette":{"a":"#5a4128","b":"#ebd2aa","K":"#1e140f"},"GW":10,"GH":7}};
+
+(function(){
+"use strict";
+
+var CW = 900, CH = 500;
+var FONT_PIXEL = "'Press Start 2P','Courier New',monospace";
+var FONT_COMIC = "'Comic Sans MS','Chalkboard SE','Trebuchet MS',sans-serif";
+var FONT_IMPACT = "Impact,'Arial Black','Trebuchet MS',sans-serif";
+
+// ============================== HELPERS ==============================
+var rand = Math.random;
+function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+function lerp(a,b,t){ return a+(b-a)*t; }
+function pick(arr){ return arr[Math.floor(rand()*arr.length)]; }
+
+// ============================== SPRITES (cached, pixel-crisp at any scale) ==============================
+var spriteCache = {};
+function getSprite(key, cell) {
+  var ck = key + "@" + cell;
+  var c = spriteCache[ck];
+  if (c) return c;
+  var d = SPRITE_DATA[key];
+  if (!d) throw new Error("missing sprite " + key);
+  c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(d.GW*cell));
+  c.height = Math.max(1, Math.round(d.GH*cell));
+  var g = c.getContext("2d");
+  for (var y=0; y<d.GH; y++) {
+    var row = d.rows[y];
+    for (var x=0; x<d.GW; x++) {
+      var ch = row.charAt(x);
+      if (ch === ".") continue;
+      g.fillStyle = d.palette[ch];
+      var x0=Math.round(x*cell), x1=Math.round((x+1)*cell), y0=Math.round(y*cell), y1=Math.round((y+1)*cell);
+      g.fillRect(x0, y0, Math.max(1,x1-x0), Math.max(1,y1-y0));
+    }
+  }
+  spriteCache[ck] = c;
+  return c;
+}
+function dims(key){ var d=SPRITE_DATA[key]; return d?[d.GW,d.GH]:[1,1]; }
+var bboxCache = {};
+function bboxOf(key){
+  if (bboxCache[key]) return bboxCache[key];
+  var d=SPRITE_DATA[key], minX=999,minY=999,maxX=-1,maxY=-1;
+  for (var y=0;y<d.GH;y++) for (var x=0;x<d.GW;x++) if (d.rows[y].charAt(x)!==".") { if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; }
+  return bboxCache[key]={minX:minX,minY:minY,maxX:maxX,maxY:maxY};
+}
+var ctx, canvas;
+function blit(key, x, y, cell){ ctx.drawImage(getSprite(key,cell), Math.round(x), Math.round(y)); }
+function spriteCropURL(key, cell){
+  var b=bboxOf(key), src=getSprite(key,cell);
+  var x0=Math.round(b.minX*cell), y0=Math.round(b.minY*cell), x1=Math.round((b.maxX+1)*cell), y1=Math.round((b.maxY+1)*cell);
+  var c=document.createElement('canvas'); c.width=x1-x0; c.height=y1-y0;
+  c.getContext('2d').drawImage(src,x0,y0,c.width,c.height,0,0,c.width,c.height);
+  return c.toDataURL();
+}
+
+// ============================== TEXT / SHAPES ==============================
+function txt(s,x,y,size,color,align,font,strokeW,strokeC){
+  ctx.font = size+"px "+(font||FONT_PIXEL);
+  ctx.textAlign = align||"left"; ctx.textBaseline = "alphabetic";
+  if (strokeW) { ctx.lineWidth=strokeW; ctx.strokeStyle=strokeC||"#1e1410"; ctx.lineJoin="round"; ctx.strokeText(s,x,y); }
+  ctx.fillStyle = color; ctx.fillText(s,x,y);
+}
+function rrPath(x,y,w,h,r){
+  ctx.beginPath(); ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h); ctx.lineTo(x+r,y+h);
+  ctx.quadraticCurveTo(x,y+h,x,y+h-r); ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+function burstPath(x,y,r,spikes,rot){
+  ctx.beginPath();
+  for (var i=0;i<spikes*2;i++){ var a=rot+i*Math.PI/spikes, rr=(i%2===0)?r:r*0.6; ctx.lineTo(x+Math.cos(a)*rr, y+Math.sin(a)*rr); }
+  ctx.closePath();
+}
+function drawBubble(text, cx, bottom, fs, pop){
+  ctx.save();
+  ctx.font = "bold "+fs+"px "+FONT_COMIC;
+  var maxW = fs*11;
+  var words = text.split(" "), lines=[], cur="";
+  for (var i=0;i<words.length;i++){ var t=cur?cur+" "+words[i]:words[i]; if(ctx.measureText(t).width>maxW && cur){lines.push(cur);cur=words[i];} else cur=t; }
+  lines.push(cur);
+  var lh=fs*1.2, tw=0; for (var j=0;j<lines.length;j++) tw=Math.max(tw,ctx.measureText(lines[j]).width);
+  var bw=tw+12, bh=lines.length*lh+7;
+  var bx=clamp(cx-bw/2,3,CW-bw-3), by=bottom-7-bh;
+  if (pop!==undefined && pop!==1){ ctx.translate(cx,bottom); ctx.scale(pop,pop); ctx.translate(-cx,-bottom); }
+  ctx.fillStyle="#fffdf2"; ctx.strokeStyle="#1e1410"; ctx.lineWidth=2.5; ctx.lineJoin="round";
+  rrPath(bx,by,bw,bh,5); ctx.fill(); ctx.stroke();
+  var tx=clamp(cx,bx+9,bx+bw-9);
+  ctx.beginPath(); ctx.moveTo(tx-5,by+bh-1); ctx.lineTo(cx,bottom); ctx.lineTo(tx+5,by+bh-1); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle="#fffdf2"; ctx.fillRect(tx-4,by+bh-3,8,4);
+  ctx.fillStyle="#1e1410"; ctx.textAlign="center"; ctx.textBaseline="alphabetic";
+  for (var k=0;k<lines.length;k++) ctx.fillText(lines[k], bx+bw/2, by+fs+1+k*lh);
+  ctx.restore();
+  return { x0:bx, y0:by, x1:bx+bw, y1:bottom };
+}
+function comicBurst(x,y,text,size,t01,color){
+  var pop = t01<0.2 ? 0.5+2.5*t01 : 1;
+  var alpha = t01>0.7 ? (1-t01)/0.3 : 1;
+  ctx.save(); ctx.globalAlpha=clamp(alpha,0,1);
+  ctx.translate(x,y); ctx.scale(pop,pop); ctx.rotate(-0.12);
+  var r = size*1.15;
+  ctx.fillStyle="#ff3b2f"; burstPath(0,0,r*1.12,11,0.2); ctx.fill();
+  ctx.fillStyle=color||"#ffe23a"; ctx.strokeStyle="#1e1410"; ctx.lineWidth=3; burstPath(0,0,r,11,0.2); ctx.fill(); ctx.stroke();
+  ctx.font="900 "+size+"px "+FONT_IMPACT; ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.lineWidth=5; ctx.strokeStyle="#fff"; ctx.strokeText(text,0,2); ctx.lineWidth=3; ctx.strokeStyle="#1e1410"; ctx.strokeText(text,0,2);
+  ctx.fillStyle="#d1210f"; ctx.fillText(text,0,2);
+  ctx.restore(); ctx.textBaseline="alphabetic";
+}
+
+// ============================== SFX ==============================
+var Sfx = (function(){
+  var ac=null, on=true;
+  function init(){ if(ac) return; try{ var AC=window.AudioContext||window.webkitAudioContext; if(AC) ac=new AC(); }catch(e){} }
+  function tone(f,d,type,vol,slide,delay){
+    if(!ac||!on) return;
+    try{
+      var t=ac.currentTime+(delay||0), o=ac.createOscillator(), g=ac.createGain();
+      o.type=type||"square"; o.frequency.setValueAtTime(f,t);
+      if(slide) o.frequency.linearRampToValueAtTime(Math.max(40,f+slide),t+d);
+      g.gain.setValueAtTime(vol||0.07,t); g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+      o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t+d+0.03);
+    }catch(e){}
+  }
+  return {
+    init:init, setOn:function(v){on=v;}, isOn:function(){return on;},
+    throwS:function(){ tone(500,0.08,"triangle",0.05,-250); },
+    hit:function(){ tone(200,0.1,"square",0.11,-90); tone(90,0.14,"triangle",0.13,-30,0.02); },
+    good:function(){ tone(660,0.06,"square",0.06); tone(880,0.08,"square",0.06,0,0.05); },
+    miss:function(){ tone(150,0.12,"sawtooth",0.05,-70); },
+    bonus:function(){ [523,659,784,1046].forEach(function(f,i){ tone(f,0.12,"square",0.07,0,i*0.07); }); },
+    penalty:function(){ tone(120,0.28,"sawtooth",0.09,-60); },
+    door:function(){ tone(320,0.1,"triangle",0.08,220); },
+    tick:function(){ tone(1100,0.04,"square",0.04); },
+    bell:function(){ [880,660,880,660].forEach(function(f,i){ tone(f,0.25,"triangle",0.09,0,i*0.2); }); }
+  };
+})();
+
+// ============================== CLASSROOM LAYOUT ==============================
+// b = floor line of the desk, c = pixel size of one sprite cell, ic = icon cell, fs = bubble font
+var ROWS = [
+  { b:196, c:2.9, ic:2.9, fs:10, xs:[285,415,545,675] },
+  { b:268, c:3.5, ic:3.3, fs:11, xs:[245,395,545,695] },
+  { b:346, c:4.2, ic:3.9, fs:12, xs:[195,375,555,735] },
+  { b:424, c:5.0, ic:4.5, fs:13, xs:[140,345,555,760] }
+];
+
+var ROSTER = [
+  { id:'john',   idle:'john_idle',   mis:'john_phone',       hit:'john_hit',   beh:'phone',    hitIcon:'icon_redcard'  },
+  { id:'maggie', idle:'maggie_idle', mis:'maggie_mirror',    hit:'maggie_hit', beh:'lipstick', hitIcon:'icon_mascara'  },
+  { id:'alice',  idle:'alice_idle',  mis:'alice_sleep',      hit:'alice_hit',  beh:'sleep',    hitIcon:'icon_dizzy'    },
+  { id:'cent',   idle:'cent_idle',   mis:'cent_laptop',      hit:'cent_hit',   beh:'laptop',   hitIcon:'icon_fire'     },
+  { id:'glen',   idle:'glen_idle',   mis:'glen_standing',    hit:'glen_hit',   beh:'hand',     hitIcon:'icon_question' },
+  { id:'linda',  idle:'linda_idle',  mis:'linda_headphones', hit:'linda_hit',  beh:'music',    hitIcon:'icon_exclaim'  },
+  { id:'tina',   idle:'tina_idle',   mis:'tina_voice',       hit:'tina_hit',   beh:'voice',    hitIcon:'icon_exclaim'  },
+  { id:'mike',   idle:'mike_idle',   mis:'mike_eating',      hit:'mike_hit',   beh:'eat',      hitIcon:'icon_teardrop' }
+];
+// behavior table: icon, score multiplier (quick, hard-to-catch behaviors pay more), bubble lines
+var BEH = {
+  phone:   { icon:'icon_phone',     mult:1.5,  lines:{ john:["Just one more text!","Checking the score!","Big game update!"], any:["On my phone!","Just checking!","One more text!"] } },
+  lipstick:{ icon:'icon_lipstick',  mult:1.0,  lines:{ maggie:["New lipstick looks great!","So glam today!","Almost perfect!"] } },
+  sleep:   { icon:'icon_zzz',       mult:0.75, lines:{ alice:["Zzz... five more minutes","Mmm... pancakes...","So sleepy..."], any:["Zzz... so tired","Five more minutes","Nap time..."] } },
+  laptop:  { icon:'icon_laptop',    mult:1.0,  lines:{ cent:["Yo, fresh beat!","New track droppin'!","This drop is fire!"] } },
+  hand:    { icon:'icon_hand',      mult:1.5,  lines:{ glen:["Ooh, pick me!","Question, please!","Excuse me, teacher!"] } },
+  music:   { icon:'icon_music',     mult:1.2,  lines:{ linda:["This song slaps!","Best song ever!","Turn it up!"] } },
+  voice:   { icon:'icon_mic',       mult:1.25, lines:{ tina:["One more message!","Voice note time!","Quick recording!"] } },
+  eat:     { icon:'icon_burger',    mult:0.75, lines:{ mike:["Mmm, so good!","Best burger ever!","Just one bite!"], any:["Snack time!","Yum yum!","Shhh, eating!"] } },
+  talk:    { icon:'icon_chat',      mult:1.25, lines:{ any:["Psst... hey!","Guess what?","Did you hear?"] } },
+  toss:    { icon:'icon_paperball', mult:2.0,  lines:{ any:["Catch this!","Heads up!","Pass it on!"] } }
+};
+var GEN_POOL = ['phone','sleep','eat','talk','toss'];
+var HIT_LINES = {
+  john:["Ref! That's a foul!","Not fair, ref!","Instant replay!"], maggie:["My mascara!","I just did this!","Ruined my look!"],
+  alice:["Huh?! Who? What?","I'm awake!","Five more... ow!"], cent:["Yo, not cool!","My beat!","Disrespect!"],
+  glen:["But... why me?","I raised my hand!","Wait, what?"], linda:["Wait, what?!","Hey! My song!","Rude!"],
+  tina:["Oh no!","Message lost!","Not again!"], mike:["Noo, my burger!","My lunch!","Wasted fries!"],
+  any:["Hey, ow!","Not fair!","Why me?!","Ouch!","That's rude!"]
+};
+var INNOCENT_LINES = ["What did I do?!","I was innocent!","Unfair!","Hey!"];
+var LAUGH_LINES = ["HA HA HA!","LOL!","TOO EASY!","NOPE!","HEHEHE!"];
+// seats: spread the named students through the grid
+var SEAT_ORDER = [5,10,0,15,3,9,12,6,1,2,4,7,8,11,13,14];
+
+function buildDesks(){
+  var occ=[], i;
+  for (i=0;i<16;i++){
+    if (i<8) occ.push({ named:true, id:ROSTER[i].id, idle:ROSTER[i].idle, mis:ROSTER[i].mis, hit:ROSTER[i].hit, beh:ROSTER[i].beh, hitIcon:ROSTER[i].hitIcon });
+    else { var g=(i-8)+1; occ.push({ named:false, id:'g'+g, idle:'g'+g+'_idle', mis:'g'+g+'_idle', hit:'g'+g+'_hit', beh:null, hitIcon:'icon_teardrop' }); }
+  }
+  var desks=[], slot=0;
+  for (var r=0;r<4;r++) for (var c=0;c<4;c++){
+    var row=ROWS[r];
+    desks.push({ row:r, col:c, x:row.xs[c], b:row.b, c:row.c, ic:row.ic, fs:row.fs,
+      occ:occ[SEAT_ORDER[slot]], state:'idle', behavior:null, t0:0, until:0, line:'', lineUntil:0, cooldownUntil:0,
+      phase:slot*0.9, hitLine:'', innocent:false, stackRect:null });
+    slot++;
+  }
+  return desks;
+}
+function geom(d){ var top=d.b-21.4*d.c; return { top:top, deskTop:top+13.4*d.c, midY:top+10*d.c }; }
+
+// ============================== CONFIG ==============================
+// Targets calibrated with simulated bot players (casual / good / expert) - tune freely after human playtests.
+var LEVELS = [
+  { target:300,  spawnMs:1700, maxActive:2, durScale:1.25, paper:5, eraser:1, doors:0, doorMs:1700 },
+  { target:600,  spawnMs:1500, maxActive:2, durScale:1.1,  paper:6, eraser:1, doors:1, doorMs:1600 },
+  { target:850,  spawnMs:1300, maxActive:3, durScale:1.0,  paper:7, eraser:1, doors:2, doorMs:1450 },
+  { target:1150, spawnMs:1100, maxActive:3, durScale:0.9,  paper:8, eraser:2, doors:2, doorMs:1300 },
+  { target:1500, spawnMs:950,  maxActive:4, durScale:0.82, paper:9, eraser:2, doors:3, doorMs:1150 }
+];
+var TOTAL_LEVELS = LEVELS.length;
+var BASE_DUR = { phone:1900, lipstick:3000, sleep:3800, laptop:3000, hand:1900, music:3000, voice:2300, eat:3500, talk:2700, toss:1600 };
+var ROUND_MS = 60000, CHARGE_MS = 500, TRAVEL_MS = 180, COUNTDOWN_MS = 2400;
+var WEAPONS = { chalk:{base:10,label:'Chalk',icon:'icon_chalk'}, paper:{base:20,label:'Paper',icon:'icon_paperball'}, eraser:{base:150,label:'Eraser',icon:'icon_eraser'} };
+var WEAPON_ORDER = ['chalk','paper','eraser'];
+var MISS_PENALTY = 5;
+var DOOR_RECT = { x:396, y:42, w:108, h:90 };
+var VISITORS = {
+  principal:{kind:'wrong',spr:'principal',ouch:"DETENTION!"}, wife:{kind:'wrong',spr:'wife',ouch:"Honey?!"},
+  nurse:{kind:'wrong',spr:'nurse',ouch:"I'm a NURSE!"}, janitor:{kind:'wrong',spr:'janitor',ouch:"I just mopped!"},
+  pizza:{kind:'right',spr:'pizza_guy',ouch:"No tip!"}, rude:{kind:'right',spr:'rude_student',ouch:"Chill, old man!"},
+  ninja:{kind:'right',spr:'ninja',ouch:"Well played..."}, mascot:{kind:'right',spr:'mascot',ouch:"GO TIGERS!"}
+};
+var VIS_KEYS = Object.keys(VISITORS);
+function comboMult(n){ return n>=10?2:(n>=6?1.5:(n>=3?1.2:1)); }
+
+// ============================== STATE ==============================
+var state = "ready", gameMode = "level", levelNo = 1;
+var R = null;
+var nowMs = 0, lastTs = 0;
+var hoverIdx = -1;
+var highScore = 0;
+
+var Store = {
+  get:function(k,d){ try{ var v=localStorage.getItem(k); return v===null?d:JSON.parse(v);}catch(e){return d;} },
+  set:function(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+};
+
+function newRound(mode, lv){
+  gameMode=mode; levelNo=lv;
+  var cfg = mode==='level' ? LEVELS[lv-1] : { doors:3, doorMs:1400, paper:8, eraser:1 };
+  R = { mode:mode, level:lv, t:0, countdown:COUNTDOWN_MS, score:0, combo:0, maxCombo:0, hits:0, throws:0,
+    desks:buildDesks(), ammo:{chalk:9999,paper:cfg.paper,eraser:cfg.eraser}, weapon:'chalk',
+    projectiles:[], bursts:[], pops:[], parts:[],
+    nextSpawn:700, lastMis:-1, charge:{on:false,t0:0,idx:-1}, backUntil:0,
+    door:{active:false}, doorEvents:[], shakeUntil:0, shakeMag:0, flashUntil:0, flashColor:'',
+    ended:false, lastTick:-1, win:false, stars:0 };
+  var n=cfg.doors, span=42000/Math.max(1,n);
+  for (var i=0;i<n;i++){
+    var at=8000+i*span+rand()*Math.max(1000,span-4000);
+    R.doorEvents.push({ at:at, who:pick(VIS_KEYS) });
+  }
+  if (n>0){ var hasRight=false; for (var j=0;j<n;j++) if (VISITORS[R.doorEvents[j].who].kind==='right') hasRight=true;
+    if (!hasRight) R.doorEvents[n-1].who=pick(['pizza','rude','ninja','mascot']); }
+}
+function curCfg(){
+  if (R.mode==='level') return LEVELS[R.level-1];
+  var f=clamp(R.t/ROUND_MS,0,1);
+  return { target:0, maxActive:f>0.4?4:3, spawnMs:lerp(1300,780,f), durScale:lerp(1.15,0.85,f), doors:3, doorMs:lerp(1500,1100,f) };
+}
+function startGame(mode, lv){
+  newRound(mode, lv||1);
+  state="playing";
+}
+
+// ============================== SCORING / THROWING ==============================
+function addScore(n){ R.score=Math.max(0,R.score+n); }
+function shake(mag,ms){ R.shakeMag=mag; R.shakeUntil=R.t+ms; }
+function flash(color,ms){ R.flashColor=color; R.flashUntil=R.t+ms; }
+function dust(x,y,n,color){ for (var i=0;i<n;i++) R.parts.push({x:x,y:y,vx:(rand()-0.5)*3.2,vy:-rand()*2.6-0.4,t0:R.t,life:380+rand()*200,color:color||'#fff',s:2+rand()*2.5}); }
+function popText(x,y,text,good,big){ R.pops.push({x:x,y:y,text:text,good:good,t0:R.t,big:!!big}); }
+
+function setWeapon(w){ if (R && R.ammo[w]>0) R.weapon=w; }
+function startCharge(idx){
+  if (!R || state!=='playing' || R.countdown>0 || R.charge.on) return;
+  if (R.ammo[R.weapon]<=0) { Sfx.miss(); return; }
+  R.charge={on:true,t0:R.t,idx:idx};
+}
+function releaseCharge(){
+  if (!R || !R.charge.on) return;
+  var power=clamp((R.t-R.charge.t0)/CHARGE_MS,0,1);
+  var idx=R.charge.idx;
+  R.charge.on=false;
+  if (idx>=0) throwAt(idx, power>=0.9);
+}
+function throwAt(idx, charged){
+  if (R.ammo[R.weapon]<=0) return;
+  var w=R.weapon;
+  R.ammo[w]--; R.throws++;
+  R.backUntil=R.t+TRAVEL_MS+260;
+  R.projectiles.push({ idx:idx, weapon:w, t0:R.t, charged:!!charged, resolved:false });
+  Sfx.throwS();
+  if (R.ammo[w]<=0) R.weapon='chalk';
+}
+function resolveHit(idx, weapon, charged){
+  var d=R.desks[idx], g=geom(d);
+  var hx=d.x, hy=g.top+4*d.c;
+  if (d.state==='mis'){
+    var mult=BEH[d.behavior].mult, cm=comboMult(R.combo);
+    var pts=Math.round(WEAPONS[weapon].base*mult*cm*(charged?1.5:1));
+    addScore(pts); R.combo++; R.hits++; if (R.combo>R.maxCombo) R.maxCombo=R.combo;
+    d.state='hit'; d.t0=R.t; d.until=R.t+1300; d.innocent=false;
+    d.hitLine=pick(HIT_LINES[d.occ.id]||HIT_LINES.any);
+    d.cooldownUntil=R.t+3200;
+    R.bursts.push({x:hx,y:hy-10,text:weapon==='eraser'?"KA-BOOM!":pick(["POW!","BONK!","THWACK!","SMACK!"]),size:weapon==='eraser'?26:20,t0:R.t,dur:520,color:'#ffe23a'});
+    popText(hx,hy-34,"+"+pts,true,pts>=60);
+    dust(hx,hy,10,'#fff3d6'); shake(weapon==='eraser'?7:4,weapon==='eraser'?320:200);
+    Sfx.hit(); Sfx.good();
+  } else if (d.state==='idle'){
+    addScore(-MISS_PENALTY); R.combo=0;
+    d.state='hit'; d.t0=R.t; d.until=R.t+1000; d.hitLine=pick(INNOCENT_LINES); d.cooldownUntil=R.t+2500; d.innocent=true;
+    popText(hx,hy-34,"-"+MISS_PENALTY,false,false);
+    R.bursts.push({x:hx,y:hy-6,text:"OOPS!",size:15,t0:R.t,dur:420,color:'#ff9aa0'});
+    dust(hx,hy,5,'#ffb3b3'); Sfx.miss();
+  } else {
+    R.combo=0; popText(hx,hy-30,"MISS",false,false); Sfx.miss();
+  }
+}
+function doorHitAt(x,y){
+  if (!R || !R.door.active || R.door.hit) return false;
+  return x>=DOOR_RECT.x-6 && x<=DOOR_RECT.x+DOOR_RECT.w+6 && y>=DOOR_RECT.y-6 && y<=DOOR_RECT.y+DOOR_RECT.h+6;
+}
+function resolveDoorHit(){
+  if (!R.door.active || R.door.hit) return false;
+  var w=R.weapon; if (R.ammo[w]<=0) return false;
+  var v=VISITORS[R.door.who], eraser=(w==='eraser');
+  R.ammo[w]--; R.throws++; R.backUntil=R.t+TRAVEL_MS+260;
+  R.projectiles.push({ door:true, weapon:w, t0:R.t, resolved:true });
+  var pts = v.kind==='right' ? (eraser?400:150) : (eraser?-250:-100);
+  addScore(pts);
+  if (pts>0){ R.combo++; R.hits++; if (R.combo>R.maxCombo) R.maxCombo=R.combo; } else R.combo=0;
+  R.door.hit=true; R.door.closeAt=R.t+800; R.door.hitAt=R.t;
+  var cx=DOOR_RECT.x+DOOR_RECT.w/2, cy=DOOR_RECT.y+DOOR_RECT.h/2;
+  R.bursts.push({x:cx,y:cy,text:pts>0?(eraser?"JACKPOT!":"BONUS!"):"OH NO!",size:pts>0?26:24,t0:R.t,dur:760,color:pts>0?'#ffe23a':'#ff8f8f'});
+  popText(cx,cy+34,(pts>0?"+":"")+pts,pts>0,true);
+  flash(pts>0?'rgba(255,214,90,0.35)':'rgba(255,60,60,0.35)',320); shake(pts>0?6:8,320);
+  if (pts>0) Sfx.bonus(); else Sfx.penalty();
+  if (R.ammo[w]<=0) R.weapon='chalk';
+  return true;
+}
+
+// ============================== UPDATE ==============================
+function activeCount(){ var n=0; for (var i=0;i<R.desks.length;i++) if (R.desks[i].state==='mis') n++; return n; }
+function spawnMis(cfg){
+  var cands=[]; for (var i=0;i<R.desks.length;i++){ var d=R.desks[i]; if (d.state==='idle' && R.t>=d.cooldownUntil && i!==R.lastMis) cands.push(i); }
+  if (!cands.length) return;
+  var idx=pick(cands), d2=R.desks[idx]; R.lastMis=idx;
+  var b = d2.occ.named ? d2.occ.beh : pick(GEN_POOL);
+  var lines = BEH[b].lines[d2.occ.id] || BEH[b].lines.any;
+  d2.state='mis'; d2.behavior=b; d2.t0=R.t; d2.until=R.t+BASE_DUR[b]*cfg.durScale; d2.line=pick(lines);
+  d2.lineUntil=R.t+Math.min(BASE_DUR[b]*cfg.durScale,2300);
+}
+function endRound(){
+  R.ended=true; R.t=ROUND_MS;
+  Sfx.bell();
+  var win=false;
+  if (R.mode==='level'){
+    var cfg=LEVELS[R.level-1]; win = R.score>=cfg.target;
+    R.stars = win ? (R.score>=cfg.target*1.7?3:(R.score>=cfg.target*1.35?2:1)) : 0;
+    if (win && R.level>=TOTAL_LEVELS) state='win'; else if (win) state='levelComplete'; else state='gameOver';
+  } else { state='win'; win=true; }
+  R.win=win;
+  if (R.score>highScore){ highScore=R.score; Store.set('cd_best_any',highScore); }
+}
+function update(dt){
+  if (state!=='playing' || !R) return;
+  if (R.countdown>0){ R.countdown-=dt; if (R.countdown>0) return; dt=-R.countdown; R.countdown=0; }
+  R.t+=dt;
+  if (R.t>=ROUND_MS){ endRound(); return; }
+  var secLeft=Math.ceil((ROUND_MS-R.t)/1000);
+  if (secLeft<=5 && secLeft!==R.lastTick){ R.lastTick=secLeft; Sfx.tick(); }
+  var cfg=curCfg();
+
+  if (R.t>=R.nextSpawn){
+    if (activeCount()<cfg.maxActive) spawnMis(cfg);
+    R.nextSpawn=R.t+cfg.spawnMs*(0.75+rand()*0.5);
+  }
+  for (var i=0;i<R.desks.length;i++){
+    var d=R.desks[i];
+    if (d.state==='mis' && R.t>=d.until){ d.state='idle'; d.cooldownUntil=R.t+1200; }
+    else if (d.state==='hit' && R.t>=d.until){ d.state='idle'; d.innocent=false; }
+  }
+  for (var k=R.projectiles.length-1;k>=0;k--){
+    var p=R.projectiles[k];
+    if (p.door){ if (R.t-p.t0>TRAVEL_MS+100) R.projectiles.splice(k,1); continue; }
+    if (!p.resolved && R.t-p.t0>=TRAVEL_MS){ p.resolved=true; resolveHit(p.idx,p.weapon,p.charged); R.projectiles.splice(k,1); }
+  }
+  if (!R.door.active && R.doorEvents.length && R.t>=R.doorEvents[0].at){
+    var ev=R.doorEvents.shift();
+    R.door={active:true,who:ev.who,start:R.t,end:R.t+cfg.doorMs,hit:false};
+    Sfx.door();
+  }
+  if (R.door.active){
+    if (!R.door.hit && R.t>=R.door.end) R.door={active:false};
+    else if (R.door.hit && R.t>=R.door.closeAt) R.door={active:false};
+  }
+  R.pops=R.pops.filter(function(p){return R.t-p.t0<900;});
+  R.bursts=R.bursts.filter(function(b){return R.t-b.t0<b.dur;});
+  R.parts=R.parts.filter(function(p){return R.t-p.t0<p.life;});
+}
+
+// ============================== BACKGROUND (cached, bold anime / Metal Slug style) ==============================
+var BG=null;
+function buildBackground(){
+  var c=document.createElement('canvas'); c.width=CW; c.height=CH; var g=c.getContext('2d');
+  var OUT='#2a1a10', i, xb;
+  g.fillStyle='#ffd45e'; g.fillRect(0,0,CW,114);
+  g.fillStyle='rgba(255,255,255,0.28)'; for (var x=0;x<CW;x+=60) g.fillRect(x,0,30,88);
+  g.fillStyle='#22b5a3'; g.fillRect(0,88,CW,26);
+  g.fillStyle='#188577'; for (var x2=0;x2<CW;x2+=44) g.fillRect(x2,96,3,18);
+  g.fillStyle='#8a5a2b'; g.fillRect(0,85,CW,5);
+  g.fillStyle=OUT; g.fillRect(0,113,CW,5);
+  g.fillStyle='#e9a652'; g.fillRect(0,118,CW,284);
+  var VPx=450,VPy=30,yb=420;
+  for (i=-14;i<=14;i++){
+    var xb0=450+i*100, xb1=450+(i+1)*100;
+    var xa0=VPx+(xb0-VPx)*(118-VPy)/(yb-VPy), xa1=VPx+(xb1-VPx)*(118-VPy)/(yb-VPy);
+    if ((i&1)===0){ g.fillStyle='rgba(255,255,255,0.08)'; g.beginPath(); g.moveTo(xa0,118); g.lineTo(xa1,118); g.lineTo(xb1,402); g.lineTo(xb0,402); g.closePath(); g.fill(); }
+  }
+  g.strokeStyle='rgba(110,60,16,0.45)'; g.lineWidth=2;
+  for (i=-14;i<=15;i++){ xb=450+i*100; var xa=VPx+(xb-VPx)*(118-VPy)/(yb-VPy); g.beginPath(); g.moveTo(xa,118); g.lineTo(xb,402); g.stroke(); }
+  var seams=[132,150,172,200,234,276,326,386];
+  for (i=0;i<seams.length;i++){ g.beginPath(); g.moveTo(0,seams[i]); g.lineTo(CW,seams[i]); g.stroke(); }
+  g.fillStyle='rgba(255,255,210,0.17)';
+  g.beginPath(); g.moveTo(50,114); g.lineTo(150,114); g.lineTo(340,380); g.lineTo(200,380); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(750,114); g.lineTo(850,114); g.lineTo(700,380); g.lineTo(560,380); g.closePath(); g.fill();
+  function windowAt(wx, sunLeft){
+    g.fillStyle=OUT; g.fillRect(wx-5,40,130,70);
+    var sky=g.createLinearGradient(0,45,0,103); sky.addColorStop(0,'#3fb4ff'); sky.addColorStop(1,'#c4ecff');
+    g.fillStyle=sky; g.fillRect(wx,45,120,58);
+    g.fillStyle='#ffe85a'; g.beginPath(); g.arc(wx+(sunLeft?24:96),60,10,0,Math.PI*2); g.fill();
+    g.fillStyle='rgba(255,255,255,0.95)';
+    g.beginPath(); g.ellipse(wx+60,76,20,8,0,0,Math.PI*2); g.ellipse(wx+76,80,14,6,0,0,Math.PI*2); g.ellipse(wx+44,81,12,5,0,0,Math.PI*2); g.fill();
+    g.fillStyle=OUT; g.fillRect(wx+57,45,6,58); g.fillRect(wx,71,120,5);
+    g.fillStyle='#8a5a2b'; g.fillRect(wx-9,103,138,7); g.strokeStyle=OUT; g.lineWidth=3; g.strokeRect(wx-9,103,138,7);
+  }
+  windowAt(40,true); windowAt(740,false);
+  function poster(px,py,w,h,col,lines,rot){
+    g.save(); g.translate(px+w/2,py+h/2); g.rotate(rot||0);
+    g.fillStyle=OUT; g.fillRect(-w/2-3,-h/2-3,w+6,h+6); g.fillStyle=col; g.fillRect(-w/2,-h/2,w,h);
+    g.fillStyle='#d23a2a'; g.beginPath(); g.arc(-w/2+4,-h/2+4,3,0,Math.PI*2); g.arc(w/2-4,-h/2+4,3,0,Math.PI*2); g.fill();
+    g.fillStyle=OUT; g.font="bold 13px "+FONT_COMIC; g.textAlign='center';
+    for (var q=0;q<lines.length;q++) g.fillText(lines[q],0,-h/2+25+q*17);
+    g.restore();
+  }
+  poster(212,46,84,60,'#ff9a3c',['STUDY','HARD!'],-0.04);
+  poster(588,46,84,60,'#5fe0d2',['BE','KIND!'],0.035);
+  g.fillStyle=OUT; g.beginPath(); g.arc(700,76,21,0,Math.PI*2); g.fill();
+  g.fillStyle='#fff3d6'; g.beginPath(); g.arc(700,76,17,0,Math.PI*2); g.fill();
+  g.fillStyle='#333'; g.fillRect(694,66,12,20); g.fillStyle='#8ee'; g.fillRect(696,69,8,12);
+  g.strokeStyle='#e0261c'; g.lineWidth=4; g.beginPath(); g.arc(700,76,16,0,Math.PI*2); g.moveTo(690,66); g.lineTo(710,86); g.stroke();
+  g.fillStyle=OUT; g.fillRect(165,52,48,42);
+  var cols=['#ff7a7a','#7ad1ff','#ffe27a','#9aff9a'];
+  for (var ry=0;ry<4;ry++) for (var rx=0;rx<5;rx++){ g.fillStyle=cols[(rx+ry)%4]; g.fillRect(168+rx*8.5,55+ry*9.5,7.5,8.5); }
+  g.fillStyle=OUT; g.fillRect(DOOR_RECT.x-3,DOOR_RECT.y-3,DOOR_RECT.w+6,DOOR_RECT.h+6);
+  g.fillStyle='#8a5a2b'; g.fillRect(DOOR_RECT.x,DOOR_RECT.y,DOOR_RECT.w,DOOR_RECT.h);
+  g.fillStyle='#fff3d6'; g.fillRect(DOOR_RECT.x+30,DOOR_RECT.y+3,48,11); g.strokeStyle=OUT; g.lineWidth=2; g.strokeRect(DOOR_RECT.x+30,DOOR_RECT.y+3,48,11);
+  g.fillStyle=OUT; g.font="bold 9px "+FONT_COMIC; g.textAlign='center'; g.fillText("ROOM 12",DOOR_RECT.x+54,DOOR_RECT.y+12);
+  g.fillStyle='#1d130c'; g.fillRect(DOOR_RECT.x+12,DOOR_RECT.y+16,DOOR_RECT.w-24,DOOR_RECT.h-16);
+  g.fillStyle=OUT; g.beginPath(); g.arc(352,75,26,0,Math.PI*2); g.fill();
+  g.fillStyle='#fff8e6'; g.beginPath(); g.arc(352,75,22,0,Math.PI*2); g.fill();
+  g.fillStyle=OUT; for (var hh=0;hh<12;hh++){ var a=hh*Math.PI/6; g.fillRect(352+Math.cos(a)*18-1,75+Math.sin(a)*18-1,3,3); }
+  g.fillStyle=OUT; g.fillRect(0,402,CW,98);
+  g.fillStyle='#8a5a2b'; g.fillRect(6,406,888,90);
+  var bd=g.createLinearGradient(0,414,0,480); bd.addColorStop(0,'#2f6f55'); bd.addColorStop(1,'#245a45');
+  g.fillStyle=bd; g.fillRect(16,414,868,68);
+  g.fillStyle='rgba(255,255,255,0.05)'; for (var s=0;s<14;s++) g.fillRect(24+s*61,418+(s%3)*6,40,3);
+  g.fillStyle='#6b4220'; g.fillRect(16,482,868,10);
+  g.fillStyle='#fff'; for (var ck=0;ck<5;ck++) g.fillRect(620+ck*18,484,10,4);
+  g.fillStyle='#caa46a'; g.fillRect(760,483,26,7);
+  g.fillStyle='rgba(255,255,255,0.85)'; g.font="bold 15px "+FONT_COMIC; g.textAlign='left';
+  g.save(); g.translate(230,442); g.rotate(-0.05); g.fillText("EXAM FRIDAY!!",0,0); g.restore();
+  g.save(); g.translate(630,444); g.rotate(0.04); g.fillText("NO PHONES!!",0,0); g.restore();
+  g.fillStyle='rgba(255,255,255,0.7)'; g.font="bold 12px "+FONT_COMIC;
+  g.fillText("2 + 2 = ?",660,470); g.fillText("(it's 4)",730,470);
+  g.strokeStyle='rgba(255,255,255,0.75)'; g.lineWidth=2; g.beginPath(); g.arc(120,448,10,0,Math.PI*2); g.moveTo(116,445); g.lineTo(116,448); g.moveTo(124,445); g.lineTo(124,448); g.moveTo(115,454); g.lineTo(125,452); g.stroke();
+  var vg=g.createRadialGradient(450,250,200,450,250,560); vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(30,10,0,0.32)');
+  g.fillStyle=vg; g.fillRect(0,0,CW,CH);
+  BG=c;
+}
+
+// ============================== SCENE DRAWING ==============================
+function drawClockHands(t){
+  var mins = 50*((R?R.t:0)/ROUND_MS);
+  var ma = (mins/60)*Math.PI*2 - Math.PI/2;
+  var ha = ((9+mins/60)/12)*Math.PI*2 - Math.PI/2;
+  ctx.strokeStyle='#2a1a10'; ctx.lineCap='round';
+  ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(352,75); ctx.lineTo(352+Math.cos(ha)*12,75+Math.sin(ha)*12); ctx.stroke();
+  ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(352,75); ctx.lineTo(352+Math.cos(ma)*17,75+Math.sin(ma)*17); ctx.stroke();
+  ctx.fillStyle='#d23a2a'; ctx.beginPath(); ctx.arc(352,75,2.5,0,Math.PI*2); ctx.fill();
+  ctx.lineCap='butt';
+}
+function drawDoorScene(t){
+  if (!R || !R.door.active) return;
+  var D=R.door, v=VISITORS[D.who];
+  var gl=ctx.createLinearGradient(0,DOOR_RECT.y+16,0,DOOR_RECT.y+DOOR_RECT.h);
+  gl.addColorStop(0,'#ffe9a8'); gl.addColorStop(1,'#ffc15c');
+  ctx.fillStyle=gl; ctx.fillRect(DOOR_RECT.x+12,DOOR_RECT.y+16,DOOR_RECT.w-24,DOOR_RECT.h-16);
+  var age=R.t-D.start, life=D.end-D.start;
+  var rise = age<140 ? (1-age/140)*34 : 0;
+  var out = (!D.hit && age>life-140) ? (age-(life-140))/140*34 : 0;
+  var shakeX = D.hit ? Math.round(Math.sin(R.t/30)*3) : 0;
+  var cell=3.1, dd=dims(v.spr), w=dd[0], h=dd[1];
+  ctx.save();
+  ctx.beginPath(); ctx.rect(DOOR_RECT.x+12,DOOR_RECT.y+16,DOOR_RECT.w-24,DOOR_RECT.h-16); ctx.clip();
+  blit(v.spr, DOOR_RECT.x+DOOR_RECT.w/2-w*cell/2+shakeX, DOOR_RECT.y+DOOR_RECT.h-h*cell+rise+out, cell);
+  ctx.restore();
+  if (D.hit) drawBubble(v.ouch, DOOR_RECT.x+DOOR_RECT.w+58, DOOR_RECT.y+64, 12, 1);
+}
+function deskSpriteKey(d, mode){
+  if (mode==='cry') return d.occ.hit;
+  if (mode==='laugh') return d.occ.mis;
+  return d.state==='mis' ? d.occ.mis : (d.state==='hit' ? d.occ.hit : d.occ.idle);
+}
+function drawStudent(d, t, mode){
+  var g=geom(d), c=d.c, bx=0, by=0;
+  if (mode==='laugh') by=-Math.abs(Math.round(Math.sin(t/110+d.phase)*3));
+  else if (mode==='cry') bx=Math.round(Math.sin(t/60+d.phase)*1.5);
+  else if (d.state==='idle') by=Math.round(Math.sin(t/520+d.phase));
+  else if (d.state==='mis') by=Math.round(Math.sin(t/105+d.phase)*1.5);
+  else if (d.state==='hit') bx=Math.round(Math.sin(t/32)*2.5);
+  blit(deskSpriteKey(d,mode), d.x-9*c+bx, g.top+by, c);
+  blit('desk', d.x-10*c, g.deskTop, c);
+}
+function drawStudentExtras(d, t, mode){
+  var g=geom(d), key=null, line=null, pop=1, a;
+  if (mode==='cry'){ key=d.occ.hitIcon; line=d.hitLineR; }
+  else if (mode==='laugh'){ key=d.occ.named?BEH[d.occ.beh].icon:'icon_chat'; line=d.laughLine; }
+  else if (d.state==='mis'){ key=BEH[d.behavior].icon; if (R.t<d.lineUntil) line=d.line; a=Math.max(0,R.t-d.t0); pop=a<140?0.6+a/140*0.55:(a<220?1.15-(a-140)/80*0.15:1); }
+  else if (d.state==='hit'){ key=d.innocent?'icon_question':d.occ.hitIcon; line=d.hitLine; a=Math.max(0,R.t-d.t0); pop=a<120?0.6+a/120*0.5:1; }
+  if (!key){ d.stackRect=null; return; }
+  if (mode && (((d.row*4+d.col)+((t/1300)|0))%2)!==0) line=null;
+  var di=dims(key), iw=di[0], ih=di[1], icell=d.ic*pop;
+  var bob = Math.round(Math.sin(t/160+d.phase)*1.5);
+  var iy = g.top - ih*icell - 3 + bob;
+  blit(key, d.x-iw*icell/2, iy, icell);
+  var sr={ x0:d.x-iw*icell/2, y0:iy, x1:d.x+iw*icell/2, y1:g.top };
+  if (line){ var br=drawBubble(line, d.x, iy-2, d.fs, pop); sr.x0=Math.min(sr.x0,br.x0); sr.x1=Math.max(sr.x1,br.x1); sr.y0=Math.min(sr.y0,br.y0); }
+  if (!mode) d.stackRect=sr;
+}
+function drawSmith(t, mode){
+  var key, cell=4.6, cx=450, bottom=498, sx=0, sy=0;
+  var anger = (R && state==='playing') ? activeCount() : 0;
+  if (mode==='win'){ key='smith_win'; cell=4.6; }
+  else if (mode==='lose'){ key='smith_lose'; cell=4.6; }
+  else if (R && (R.charge.on || R.t<R.backUntil)) { key='smith_back'; cell=4.7; }
+  else { key='smith_throw'; cell=4.6;
+    var amp=Math.min(2.4,anger*0.7); sx=Math.round((rand()-0.5)*amp*2); sy=Math.round((rand()-0.5)*amp); }
+  var dd=dims(key), w=dd[0], b=bboxOf(key);
+  var x=cx-w*cell/2+sx, y=bottom-(b.maxY+1)*cell+sy;
+  blit(key, x, y, cell);
+  if (key==='smith_throw'){
+    var hx=x+19.5*cell, hy=y+12.5*cell;
+    ctx.fillStyle='#fff'; ctx.fillRect(Math.round(hx+Math.sin(t/90)*2),Math.round(hy-6),3,9);
+    if (((t/120)|0)%2===0){ ctx.fillStyle='rgba(255,255,255,0.8)'; ctx.fillRect(Math.round(hx+6),Math.round(hy+Math.sin(t/70)*3),2,2); ctx.fillRect(Math.round(hx+9),Math.round(hy-4),2,2); }
+    if (anger>=2){ var f=((t/380)%1); ctx.fillStyle='#8fdcff'; var dx=x+4*cell, dy=y+3*cell+f*26; ctx.fillRect(Math.round(dx),Math.round(dy),3,5); ctx.fillRect(Math.round(dx+1),Math.round(dy-2),1,2); }
+  }
+  if (mode==='win'){ for (var i=0;i<5;i++){ var an=t/400+i*1.26; var sx2=cx+Math.cos(an)*62, sy2=bottom-70+Math.sin(an*1.3)*30; ctx.fillStyle='#ffe23a'; ctx.fillRect(Math.round(sx2)-2,Math.round(sy2)-6,4,12); ctx.fillRect(Math.round(sx2)-6,Math.round(sy2)-2,12,4); } }
+  if (mode==='lose'){ for (var j=0;j<6;j++){ var f2=((t/500)+j*0.17)%1; var side=j%2?1:-1; ctx.fillStyle='#6ec1f0'; ctx.fillRect(Math.round(cx+side*(14+j*3)),Math.round(bottom-76+f2*60),4,6); } }
+}
+function drawProjectiles(){
+  for (var i=0;i<R.projectiles.length;i++){
+    var p=R.projectiles[i], t=clamp((R.t-p.t0)/TRAVEL_MS,0,1);
+    var fx=464, fy=430, tx, ty;
+    if (p.door){ tx=DOOR_RECT.x+DOOR_RECT.w/2; ty=DOOR_RECT.y+DOOR_RECT.h*0.6; }
+    else { var d=R.desks[p.idx], g=geom(d); tx=d.x; ty=g.top+5*d.c; }
+    var x=lerp(fx,tx,t), y=lerp(fy,ty,t)-Math.sin(t*Math.PI)*46;
+    ctx.save(); ctx.translate(x,y); ctx.rotate(t*10);
+    ctx.lineWidth=2; ctx.strokeStyle='#1e1410';
+    if (p.weapon==='chalk'){ ctx.fillStyle='#fff'; ctx.fillRect(-7,-2.5,14,5); ctx.strokeRect(-7,-2.5,14,5); }
+    else if (p.weapon==='paper'){ ctx.fillStyle='#f7f2e3'; ctx.beginPath(); ctx.arc(0,0,7,0,Math.PI*2); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-3,-2); ctx.lineTo(2,1); ctx.moveTo(1,-4); ctx.lineTo(-1,3); ctx.stroke(); }
+    else { ctx.fillStyle='#e8c88c'; ctx.fillRect(-10,-6,20,12); ctx.fillStyle='#6a4a2a'; ctx.fillRect(-10,0,20,6); ctx.strokeRect(-10,-6,20,12); }
+    ctx.restore();
+  }
+}
+function drawFx(){
+  var i;
+  for (i=0;i<R.parts.length;i++){ var p=R.parts[i], a=(R.t-p.t0)/p.life, tt=R.t-p.t0;
+    ctx.globalAlpha=clamp(1-a,0,1); ctx.fillStyle=p.color;
+    ctx.fillRect(Math.round(p.x+p.vx*tt/16),Math.round(p.y+p.vy*tt/16+0.012*tt*tt/16),p.s,p.s); }
+  ctx.globalAlpha=1;
+  for (i=0;i<R.bursts.length;i++){ var b=R.bursts[i]; comicBurst(b.x,b.y,b.text,b.size,(R.t-b.t0)/b.dur,b.color); }
+  for (i=0;i<R.pops.length;i++){ var pp=R.pops[i], age=(R.t-pp.t0)/900;
+    ctx.save(); ctx.globalAlpha=clamp(1-age*age,0,1);
+    txt(pp.text,pp.x,pp.y-age*30,pp.big?22:16,pp.good?'#ffd23a':'#ff6b6b','center',FONT_IMPACT,4,'#1e1410'); ctx.restore(); }
+}
+function drawAim(){
+  if (R.charge.on && R.charge.idx>=0){
+    var d=R.desks[R.charge.idx], g=geom(d), cy=g.midY-4;
+    var power=clamp((R.t-R.charge.t0)/CHARGE_MS,0,1), full=power>=0.9;
+    ctx.strokeStyle=full?'#ff3b2f':'#ffe23a'; ctx.lineWidth=3;
+    var r=14+d.c*2+(full?Math.sin(R.t/50)*2:0);
+    ctx.beginPath(); ctx.arc(d.x,cy,r,0,Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(d.x-r-5,cy); ctx.lineTo(d.x-r+5,cy); ctx.moveTo(d.x+r-5,cy); ctx.lineTo(d.x+r+5,cy);
+    ctx.moveTo(d.x,cy-r-5); ctx.lineTo(d.x,cy-r+5); ctx.moveTo(d.x,cy+r-5); ctx.lineTo(d.x,cy+r+5); ctx.stroke();
+    var bx=512, by=462, bw=130, bh=12;
+    ctx.fillStyle='#1e1410'; ctx.fillRect(bx-3,by-3,bw+6,bh+6);
+    ctx.fillStyle='#4a3a28'; ctx.fillRect(bx,by,bw,bh);
+    var grad=ctx.createLinearGradient(bx,0,bx+bw,0); grad.addColorStop(0,'#ffd23a'); grad.addColorStop(1,'#ff4a2f');
+    ctx.fillStyle=grad; ctx.fillRect(bx,by,bw*power,bh);
+    txt(full?"POWER! +50%":"HOLD...",bx+bw/2,by-8,9,full?'#ff6b4a':'#fff3d6','center',FONT_PIXEL,3,'#1e1410');
+  } else if (hoverIdx>=0 && state==='playing' && R.countdown<=0){
+    var d2=R.desks[hoverIdx], g2=geom(d2);
+    ctx.strokeStyle='rgba(30,16,8,0.55)'; ctx.lineWidth=2; ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.arc(d2.x,g2.midY-4,14+d2.c*2,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+  }
+}
+function drawHUD(t){
+  ctx.fillStyle='rgba(30,16,8,0.92)'; ctx.fillRect(0,0,CW,34);
+  ctx.fillStyle='#ffcf5a'; ctx.fillRect(0,34,CW,3);
+  var remain=Math.max(0,ROUND_MS-R.t), fm=50*(remain/ROUND_MS), mm=Math.floor(fm), ss=Math.floor((fm-mm)*60);
+  var clock=(mm<10?"0":"")+mm+":"+(ss<10?"0":"")+ss;
+  txt("CLASS ENDS IN",12,13,8,'#d8b27a','left',FONT_PIXEL);
+  var low = remain<10000 && ((R.t/250)|0)%2===0;
+  txt(clock,12,30,15,low?'#ffffff':'#ff6a55','left',FONT_PIXEL);
+  txt("SCORE",450,13,8,'#d8b27a','center',FONT_PIXEL);
+  txt(String(R.score),450,31,16,'#fff3d6','center',FONT_PIXEL);
+  if (R.combo>=2){
+    var cm=comboMult(R.combo);
+    txt("COMBO x"+R.combo,630,16,10,'#ffb13d','center',FONT_PIXEL);
+    txt(cm>1?("POINTS x"+cm):"keep it up!",630,30,8,'#ffe9b0','center',FONT_PIXEL);
+  }
+  if (R.mode==='level'){
+    var cfg=LEVELS[R.level-1];
+    txt("LEVEL "+R.level+"/"+TOTAL_LEVELS,888,13,8,'#d8b27a','right',FONT_PIXEL);
+    var met=R.score>=cfg.target;
+    txt(met?"TARGET MET!":"TARGET "+cfg.target,888,29,10,met?'#7CFC8A':'#fff3d6','right',FONT_PIXEL);
+    ctx.fillStyle='#4a3a28'; ctx.fillRect(742,31,146,3);
+    ctx.fillStyle=met?'#7CFC8A':'#ffcf5a'; ctx.fillRect(742,31,146*clamp(R.score/cfg.target,0,1),3);
+  } else {
+    txt("HIGH-SCORE MODE",888,13,8,'#d8b27a','right',FONT_PIXEL);
+    txt("BEST "+highScore,888,30,10,'#fff3d6','right',FONT_PIXEL);
+  }
+}
+function drawCountdown(t){
+  if (!R || R.countdown<=0) return;
+  ctx.fillStyle='rgba(20,10,0,0.35)'; ctx.fillRect(0,37,CW,CH-37);
+  var left=R.countdown, label, sub='';
+  if (left>1600) { label="READY?"; sub=R.mode==='level' ? ("LEVEL "+R.level+" - TARGET "+LEVELS[R.level-1].target) : "HIGH-SCORE MODE"; }
+  else if (left>800) label="SET...";
+  else label="GO!";
+  var seg = left>1600?(2400-left)/800:(left>800?(1600-left)/800:(800-left)/800);
+  comicBurst(450,235,label,left>1600?44:56,clamp(seg,0,0.9),left<=800?'#7CFC8A':'#ffe23a');
+  if (sub) txt(sub,450,330,12,'#fff3d6','center',FONT_PIXEL,4,'#1e1410');
+}
+function drawResultBanner(t, win){
+  var str = win ? "CLASS DISMISSED!" : "THE CLASS WINS!";
+  var pulse = 1+Math.sin(t/180)*0.03;
+  ctx.save(); ctx.translate(450,72); ctx.scale(pulse,pulse); ctx.rotate(-0.03);
+  ctx.fillStyle='#1e1410'; ctx.fillRect(-232,-27,464,54);
+  ctx.fillStyle=win?'#ffe23a':'#ff9aa8'; ctx.fillRect(-226,-22,452,44);
+  ctx.fillStyle=win?'#ffb81f':'#e8607a'; ctx.fillRect(-226,8,452,14);
+  ctx.font="900 32px "+FONT_IMPACT; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.lineWidth=6; ctx.strokeStyle='#fff'; ctx.strokeText(str,0,1);
+  ctx.lineWidth=3; ctx.strokeStyle='#1e1410'; ctx.strokeText(str,0,1);
+  ctx.fillStyle=win?'#d1210f':'#7a1f9a'; ctx.fillText(str,0,1);
+  ctx.restore(); ctx.textBaseline='alphabetic';
+}
+
+function drawClassroom(t, mode){
+  // mode: null (play), 'cry' (teacher won), 'laugh' (teacher lost)
+  ctx.save();
+  if (R && R.t<R.shakeUntil && state==='playing'){ var m=R.shakeMag*(R.shakeUntil-R.t)/300; ctx.translate((rand()-0.5)*m*2,(rand()-0.5)*m*2); }
+  ctx.drawImage(BG,0,0);
+  drawClockHands(t);
+  drawDoorScene(t);
+  var i, r;
+  for (r=0;r<4;r++) for (i=0;i<R.desks.length;i++) if (R.desks[i].row===r) drawStudent(R.desks[i],t,mode);
+  drawSmith(t, mode==='cry'?'win':(mode==='laugh'?'lose':null));
+  if (!mode) drawProjectiles();
+  for (r=0;r<4;r++) for (i=0;i<R.desks.length;i++) if (R.desks[i].row===r) drawStudentExtras(R.desks[i],t,mode);
+  if (!mode) { drawFx(); drawAim(); }
+  ctx.restore();
+  if (R && R.t<R.flashUntil && state==='playing'){ ctx.fillStyle=R.flashColor; ctx.fillRect(0,0,CW,CH); }
+  if (mode) drawResultBanner(t, mode==='cry');
+  else { drawHUD(t); drawCountdown(t); }
+}
+
+// ============================== TITLE SCREEN ==============================
+var titleSim = { cur:-1, t0:0, chalk:null, smithLine:0, smithT:0 };
+var TITLE_SMITH_LINES = ["SIT DOWN!!","QUIET!!","EYES FRONT!","DETENTION!!"];
+function drawTitle(t){
+  var cx=450, cy=235, a0=t/5000, i;
+  ctx.fillStyle='#ffe27a'; ctx.fillRect(0,0,CW,CH);
+  for (i=0;i<32;i+=2){
+    var a1=a0+i*Math.PI*2/32, a2=a0+(i+1)*Math.PI*2/32;
+    ctx.fillStyle='#ffc247'; ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+Math.cos(a1)*800,cy+Math.sin(a1)*800); ctx.lineTo(cx+Math.cos(a2)*800,cy+Math.sin(a2)*800); ctx.closePath(); ctx.fill();
+  }
+  var vg=ctx.createRadialGradient(cx,cy,180,cx,cy,520); vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(90,20,0,0.45)');
+  ctx.fillStyle=vg; ctx.fillRect(0,0,CW,CH);
+  ctx.fillStyle='#2a1a10'; ctx.fillRect(0,392,CW,108);
+  ctx.fillStyle='#8a5a2b'; ctx.fillRect(0,398,CW,102);
+  var pulse=1+Math.sin(t/260)*0.025;
+  ctx.save(); ctx.translate(450,70); ctx.rotate(-0.045); ctx.scale(pulse,pulse);
+  function big(s,y,size){
+    ctx.font="900 "+size+"px "+FONT_IMPACT; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.lineWidth=14; ctx.strokeStyle='#1e1410'; ctx.lineJoin='round'; ctx.strokeText(s,4,y+5);
+    ctx.fillStyle='#d1210f'; ctx.fillText(s,6,y+8);
+    ctx.lineWidth=12; ctx.strokeStyle='#1e1410'; ctx.strokeText(s,0,y);
+    var gr=ctx.createLinearGradient(0,y-size/2,0,y+size/2); gr.addColorStop(0,'#fffbe0'); gr.addColorStop(1,'#ffd23a');
+    ctx.fillStyle=gr; ctx.fillText(s,0,y);
+  }
+  big("CLASS",-4,60); big("DISMISSED!",56,60);
+  ctx.restore(); ctx.textBaseline='alphabetic';
+  ctx.font="bold 15px "+FONT_COMIC; ctx.textAlign='center'; ctx.lineJoin='round'; ctx.lineWidth=5; ctx.strokeStyle='#1e1410';
+  ctx.strokeText("50 minutes. 16 troublemakers. 1 very angry teacher.",450,428); ctx.fillStyle='#fff3d6';
+  ctx.fillText("50 minutes. 16 troublemakers. 1 very angry teacher.",450,428);
+  var key='smith_throw', cell=6.2, dd=dims(key), w=dd[0], b=bboxOf(key);
+  var sx=170-w*cell/2+Math.round((rand()-0.5)*3), sy=392-(b.maxY+1)*cell+Math.round((rand()-0.5)*2);
+  blit(key, sx, sy, cell);
+  if (t-titleSim.smithT>1700){ titleSim.smithT=t; titleSim.smithLine=(titleSim.smithLine+1)%TITLE_SMITH_LINES.length; }
+  drawBubble(TITLE_SMITH_LINES[titleSim.smithLine], 175, sy+6, 14, 1);
+  var ox=395, oy0=298, oy1=388, cs=3.3, sp=125;
+  if (t-titleSim.t0>1250){ titleSim.t0=t; titleSim.cur=(titleSim.cur+1)%8; titleSim.chalk={t0:t,idx:titleSim.cur}; }
+  var el=t-titleSim.t0;
+  for (var k=0;k<8;k++){
+    var ch=ROSTER[k], col=k%4, row=(k/4)|0, dx=ox+col*sp, by=row?oy1:oy0;
+    var dsk={ x:dx, c:cs, ic:cs*1.05, fs:9, b:by };
+    var g=geom(dsk), cur=(k===titleSim.cur), keyS=ch.idle, bobY=Math.round(Math.sin(t/520+k));
+    if (cur && el<800){ keyS=ch.mis; bobY=Math.round(Math.sin(t/105)*1.5); }
+    else if (cur && el>=800){ keyS=ch.hit; }
+    blit(keyS, dx-9*cs, g.top+bobY, cs); blit('desk', dx-10*cs, g.deskTop, cs);
+    if (cur){
+      var ik = el<800 ? BEH[ch.beh].icon : ch.hitIcon, di=dims(ik);
+      blit(ik, dx-di[0]*dsk.ic/2, g.top-di[1]*dsk.ic-3, dsk.ic);
+      var ln = el<800 ? BEH[ch.beh].lines[ch.id][0] : HIT_LINES[ch.id][0];
+      drawBubble(ln, dx, g.top-di[1]*dsk.ic-5, 10, 1);
+    }
+  }
+  if (titleSim.chalk){
+    var c0=titleSim.chalk, tt=clamp((t-c0.t0-560)/240,0,1);
+    if (tt>0 && tt<1){
+      var k2=c0.idx, dx2=ox+(k2%4)*sp, by2=(k2>>2)?oy1:oy0, g2=geom({x:dx2,c:cs,b:by2});
+      var px=lerp(252,dx2,tt), py=lerp(335,g2.top+4*cs,tt)-Math.sin(tt*Math.PI)*40;
+      ctx.save(); ctx.translate(px,py); ctx.rotate(tt*9); ctx.fillStyle='#fff'; ctx.strokeStyle='#1e1410'; ctx.lineWidth=2; ctx.fillRect(-7,-2.5,14,5); ctx.strokeRect(-7,-2.5,14,5); ctx.restore();
+    }
+  }
+  if (highScore>0) txt("BEST: "+highScore,14,386,9,'#fff3d6','left',FONT_PIXEL,3,'#1e1410');
+}
+
+// ============================== SCREENS / OVERLAY ==============================
+var ov, panelTitle, panelText, panelHS, panelBtns, stageEl;
+function setOverlay(mode){ ov.className = mode; }
+function setButtons(list){
+  panelBtns.innerHTML="";
+  list.forEach(function(b){ var el=document.createElement('button'); el.textContent=b.label; if(b.alt) el.className='alt'; el.addEventListener('click',function(e){ Sfx.init(); b.fn(e); }); panelBtns.appendChild(el); });
+}
+function showMenu(){
+  panelText.style.maxWidth='';
+  setOverlay('menu'); panelTitle.textContent=''; panelText.innerHTML=''; panelHS.textContent='';
+  setButtons([ {label:'LEVEL MODE',fn:function(){startGame('level',1);}}, {label:'HIGH-SCORE MODE',fn:function(){startGame('endless',1);}}, {label:'HOW TO PLAY',alt:true,fn:showHowTo} ]);
+}
+var VIS_LABEL={principal:'Principal',wife:"Teacher's wife",nurse:'Nurse',janitor:'Janitor',pizza:'Pizza guy',rude:'Rude kid',ninja:'Ninja',mascot:'Mascot'};
+function visHTML(list, cls){
+  return '<div class="row">'+list.map(function(k){ return '<div class="vis"><img src="'+spriteCropURL(VISITORS[k].spr,3)+'"><span class="'+cls+'">'+VIS_LABEL[k]+'</span></div>'; }).join('')+'</div>';
+}
+function showHowTo(){
+  setOverlay('info');
+  panelTitle.textContent='HOW TO PLAY';
+  panelText.style.maxWidth='none';
+  panelText.innerHTML='<div class="howto">'+
+   '<div>'+
+   '<h3>Throw</h3>Click or tap a <b>misbehaving student</b> (or the icon / speech bubble above them). <b>Hold a moment</b> before releasing for a <b>POWER throw (+50%)</b>.'+
+   '<h3>Weapons (keys 1 / 2 / 3)</h3><div class="row"><div class="vis"><img src="'+spriteCropURL('icon_chalk',5)+'">Chalk<br>10 pts, unlimited</div><div class="vis"><img src="'+spriteCropURL('icon_paperball',6)+'">Paper ball<br>20 pts, a few</div><div class="vis"><img src="'+spriteCropURL('icon_eraser',5)+'">Eraser<br>150 pts, ONE shot</div></div>'+
+   '<h3>Scoring</h3>Quick troublemakers (phones, flying paper) pay more. Chain hits for a <b>combo multiplier</b> (x1.2 at 3, x1.5 at 6, x2 at 10). Hitting a well-behaved student costs <b>-5</b> and breaks your combo.'+
+   '</div><div>'+
+   '<h3>The back door</h3>Someone bursts in for just a moment. <span class="no">SPARE</span> the people who belong at school:'+visHTML(['principal','wife','nurse','janitor'],'no')+
+   '<span class="ok">HIT</span> the people who are completely lost (+150, or <b>+400 with the Eraser</b>!):'+visHTML(['pizza','rude','ninja','mascot'],'ok')+
+   'Hit the wrong one? -100 (or -250 with the Eraser).'+
+   '</div></div>';
+  panelHS.textContent='';
+  setButtons([{label:'BACK',fn:showMenu}]);
+}
+function stars(n){ return n>0 ? '\u2605'.repeat(n)+'\u2606'.repeat(3-n) : ''; }
+function toMenu(){ state='ready'; }
+function showResult(){
+  panelText.style.maxWidth='';
+  setOverlay('result');
+  if (state==='levelComplete'){
+    panelTitle.textContent='LEVEL '+R.level+' CLEAR! '+stars(R.stars);
+    panelText.innerHTML='Score <b>'+R.score+'</b> / target '+LEVELS[R.level-1].target+' &middot; best combo x'+R.maxCombo;
+    setButtons([{label:'NEXT LEVEL',fn:function(){startGame('level',R.level+1);}},{label:'MENU',alt:true,fn:toMenu}]);
+  } else if (state==='gameOver'){
+    panelTitle.textContent='THE BELL RINGS...';
+    panelText.innerHTML='Score <b>'+R.score+'</b>, needed '+LEVELS[R.level-1].target+'. The class wins this round!';
+    setButtons([{label:'TRY AGAIN',fn:function(){startGame('level',R.level);}},{label:'MENU',alt:true,fn:toMenu}]);
+  } else {
+    var isEnd=R.mode==='endless';
+    panelTitle.textContent=isEnd?'CLASS DISMISSED!':'ALL 5 CLASSES CLEAR! '+stars(R.stars);
+    panelText.innerHTML='Final score <b>'+R.score+'</b>'+(R.score>=highScore&&R.score>0?' &mdash; <b>NEW BEST!</b>':'')+' &middot; best combo x'+R.maxCombo;
+    setButtons([{label:'PLAY AGAIN',fn:function(){startGame(R.mode,1);}},{label:'MENU',alt:true,fn:toMenu}]);
+  }
+  panelHS.textContent='';
+}
+var prevState=null;
+function syncOverlay(){
+  if (state===prevState) return;
+  prevState=state; stageEl.setAttribute('data-state',state);
+  if (state==='ready') showMenu();
+  else if (state==='playing') setOverlay('hidden');
+  else showResult();
+}
+
+// ============================== WEAPON BAR / INPUT ==============================
+function buildWeaponBar(){
+  var bar=document.getElementById('weaponBar');
+  WEAPON_ORDER.forEach(function(w,i){
+    var slot=document.createElement('div'); slot.className='weapon-slot'; slot.dataset.weapon=w;
+    var c=document.createElement('canvas'); c.width=60; c.height=60; slot.appendChild(c);
+    var cnt=document.createElement('span'); cnt.className='weapon-count'; slot.appendChild(cnt);
+    var key=document.createElement('span'); key.className='weapon-key'; key.textContent=String(i+1); slot.appendChild(key);
+    slot.addEventListener('pointerdown',function(e){ e.stopPropagation(); setWeapon(w); });
+    bar.appendChild(slot);
+  });
+}
+function updateWeaponBar(){
+  if (!R || state!=='playing') return;
+  var bar=document.getElementById('weaponBar');
+  for (var i=0;i<bar.children.length;i++){
+    var slot=bar.children[i], w=slot.dataset.weapon;
+    slot.className='weapon-slot'+(w===R.weapon?' active':'')+(R.ammo[w]<=0?' empty':'');
+    var c=slot.querySelector('canvas'), cc=c.getContext('2d'); cc.clearRect(0,0,60,60);
+    var k=WEAPONS[w].icon, di=dims(k), cell=Math.min(54/di[0],54/di[1]);
+    cc.drawImage(getSprite(k,cell),Math.round((60-di[0]*cell)/2),Math.round((60-di[1]*cell)/2));
+    slot.querySelector('.weapon-count').textContent = w==='chalk'?'\u221e':R.ammo[w];
+  }
+}
+function toCanvas(e){ var r=canvas.getBoundingClientRect(); return { x:(e.clientX-r.left)*CW/r.width, y:(e.clientY-r.top)*CH/r.height }; }
+function nearestDesk(x,y){
+  var best=-1, bd=1e9;
+  for (var i=0;i<R.desks.length;i++){ var d=R.desks[i], g=geom(d), dx=x-d.x, dy=(y-g.midY)*1.15, dist=dx*dx+dy*dy; if (dist<bd){bd=dist;best=i;} }
+  return best;
+}
+// "click what you see": a troublemaker's icon/bubble first, then the visible student, then the closest desk
+function pickDesk(x,y){
+  var i, r;
+  for (r=3;r>=0;r--) for (i=0;i<R.desks.length;i++){ var d=R.desks[i];
+    if (d.row===r && d.state==='mis' && d.stackRect && x>=d.stackRect.x0 && x<=d.stackRect.x1 && y>=d.stackRect.y0 && y<=d.stackRect.y1) return i; }
+  for (r=3;r>=0;r--) for (i=0;i<R.desks.length;i++){ var e=R.desks[i], g=geom(e);
+    if (e.row===r && Math.abs(x-e.x)<=10*e.c && y>=g.top && y<=e.b) return i; }
+  return nearestDesk(x,y);
+}
+function onDown(x,y){
+  if (state!=='playing' || !R || R.countdown>0) return;
+  if (doorHitAt(x,y)){ resolveDoorHit(); return; }
+  if (y<40) return;
+  startCharge(pickDesk(x,y));
+}
+
+// ============================== LOOP ==============================
+function frame(ts){
+  if (!lastTs) lastTs=ts;
+  var dt=Math.min(50,ts-lastTs); lastTs=ts; nowMs+=dt;
+  if (state==='playing'){ update(dt); }
+  if (R && state==='playing'){ drawClassroom(nowMs,null); }
+  else if (R && (state==='levelComplete'||state==='win'||state==='gameOver')){
+    var mode=(state==='gameOver')?'laugh':'cry';
+    for (var i=0;i<R.desks.length;i++){ var d=R.desks[i];
+      if (!d.hitLineR) d.hitLineR=pick(HIT_LINES[d.occ.id]||HIT_LINES.any);
+      if (!d.laughLine) d.laughLine=LAUGH_LINES[i%LAUGH_LINES.length]; }
+    drawClassroom(nowMs,mode);
+  } else drawTitle(nowMs);
+  updateWeaponBar();
+  syncOverlay();
+  requestAnimationFrame(frame);
+}
+
+function init(){
+  canvas=document.getElementById('game'); ctx=canvas.getContext('2d');
+  ov=document.getElementById('overlay'); panelTitle=document.getElementById('overlayTitle'); panelText=document.getElementById('overlayText');
+  panelHS=document.getElementById('highScoreLine'); panelBtns=document.getElementById('modeBtns'); stageEl=document.getElementById('stage');
+  highScore=Store.get('cd_best_any',0);
+  buildBackground(); buildWeaponBar();
+  canvas.addEventListener('pointerdown',function(e){ Sfx.init(); var p=toCanvas(e); hoverIdx=-1; onDown(p.x,p.y); e.preventDefault(); });
+  canvas.addEventListener('pointermove',function(e){ if (state==='playing' && R && e.pointerType==='mouse'){ var p=toCanvas(e); hoverIdx = (p.y>40 && !doorHitAt(p.x,p.y)) ? pickDesk(p.x,p.y) : -1; } });
+  canvas.addEventListener('pointerleave',function(){ hoverIdx=-1; });
+  window.addEventListener('pointerup',function(){ releaseCharge(); });
+  window.addEventListener('pointercancel',function(){ if (R) R.charge.on=false; });
+  var sb=document.getElementById('sfxBtn');
+  function toggleSfx(){ Sfx.setOn(!Sfx.isOn()); sb.textContent='SFX: '+(Sfx.isOn()?'ON':'OFF'); }
+  window.addEventListener('keydown',function(e){
+    if (e.key==='1') setWeapon('chalk'); else if (e.key==='2') setWeapon('paper'); else if (e.key==='3') setWeapon('eraser');
+    else if (e.key==='m'||e.key==='M') toggleSfx();
+  });
+  sb.addEventListener('click',function(){ Sfx.init(); toggleSfx(); });
+  showMenu();
+  requestAnimationFrame(frame);
+}
+if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+
+window.__CD__ = {
+  getState:function(){return state;}, setState:function(s){state=s;},
+  startGame:startGame, getR:function(){return R;}, update:update, endRound:endRound,
+  skipCountdown:function(){ if (R) R.countdown=0; },
+  throwAt:throwAt, resolveHit:resolveHit, resolveDoorHit:resolveDoorHit, doorHitAt:doorHitAt, spawnMis:spawnMis, curCfg:curCfg,
+  setWeapon:setWeapon, nearestDesk:nearestDesk, pickDesk:pickDesk, startCharge:startCharge, releaseCharge:releaseCharge, onDown:onDown,
+  comboMult:comboMult, LEVELS:LEVELS, VISITORS:VISITORS, DOOR_RECT:DOOR_RECT, geom:geom,
+  getHigh:function(){return highScore;}, setRand:function(f){rand=f;}, getNow:function(){return nowMs;}
+};
+})();
+</script>
+</body>
+</html>
